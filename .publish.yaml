@@ -1,0 +1,15 @@
+version: 1
+forge: github
+base: main
+review:
+  rules:
+    - AGENTS.md
+    - BOOTSTRAP.md
+gate:
+  - name: starter
+    run: uv run --no-project python -m unittest discover -s tests -v
+    instructions: Set FLEET_BIN to an absolute path of a compatible Task-only Fleet executable. The test must use the real binary and FakeRuntime, never a live harness session.
+  - name: hooks
+    run: prek run --all-files
+ci:
+  required: false
