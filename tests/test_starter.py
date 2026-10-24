@@ -1,17 +1,32 @@
 """Exercise distributable assets through the installed Fleet Task API."""
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import subprocess
 import tempfile
 import tomllib
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class Starter(unittest.TestCase):
+    def test_windows_relative_paths_match_bundle_manifest(self):
+        # Exercise the full installation with Windows relative path spelling,
+        # even when the host running this regression is POSIX.
+        native_relative_to = type(ROOT).relative_to
+
+        def relative_to(path, other, *args, **kwargs):
+            result = native_relative_to(path, other, *args, **kwargs)
+            if other == ROOT:
+                return PureWindowsPath(*result.parts)
+            return result
+
+        with patch.object(type(ROOT), 'relative_to', relative_to):
+            self.test_clean_workspace_and_task_lifecycle()
+
     def test_clean_workspace_and_task_lifecycle(self):
         manifest = tomllib.loads((ROOT / 'starter.toml').read_text())
         self.assertEqual(manifest['version'], 1)
@@ -24,7 +39,7 @@ class Starter(unittest.TestCase):
             path = PurePosixPath(asset)
             self.assertFalse(path.is_absolute() or '..' in path.parts)
             self.assertTrue((ROOT / asset).is_file(), asset)
-        workspace_assets = {str(p.relative_to(ROOT)) for p in (ROOT / 'workspace').rglob('*') if p.is_file()}
+        workspace_assets = {p.relative_to(ROOT).as_posix() for p in (ROOT / 'workspace').rglob('*') if p.is_file()}
         self.assertTrue(workspace_assets <= set(assets))
         fleet = os.environ.get('FLEET_BIN')
         self.assertTrue(fleet, 'Set FLEET_BIN to the Task-only Fleet binary; integration is required')

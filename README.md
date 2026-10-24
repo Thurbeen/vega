@@ -87,7 +87,9 @@ The test first failed because the starter manifest did not exist. It now creates
 an isolated installation from the allowlist, parses the unchanged production
 config through Fleet, and uses the real Task CLI with FakeRuntime to apply,
 brief and repeatedly reconcile VEGA without duplicating its identity. It uses a
-workspace path containing spaces and removes its own temporary tree.
+workspace path containing spaces and removes its own temporary tree. A second
+end-to-end run simulates Windows relative-path separators to check manifest
+portability; this does not replace native Windows runtime validation.
 
 FakeRuntime is test-only. This test does not log in to a harness, start live
 Thurbox sessions, validate Windows startup, or prove the engine's concurrent
