@@ -8,9 +8,10 @@ running as an ordinary Task.
 VEGA is dispatch-only Mission Control. Every substantive requested deliverable—
 from design and research through implementation, review, writing and operations—
 runs in a bounded worker Task with its own prepared workspace. VEGA itself only
-routes and steers work, resolves dependencies, checks recorded evidence and
-reports state. A routine status check does not need a recursive Task; short or
-read-only work is not an exception to dispatch.
+routes and steers work, including guarded direct prompts to an existing owned
+Task session, resolves dependencies, checks recorded evidence and reports state.
+A routine status check does not need a recursive Task; short or read-only work is
+not an exception to dispatch.
 
 This starter targets Fleet v2.1.0, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
@@ -55,7 +56,7 @@ this checkout, its Git directory, tests, local configuration or arbitrary files.
 | `workspace/AGENTS.md` | VEGA's workspace instructions |
 | `workspace/prompts/mission-control.md` | Startup and coordination prompt |
 | `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a Task |
-| `workspace/.agents/skills/task-status/SKILL.md` | Read Task state and evidence |
+| `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
 | `config/fleet.toml` | Working Thurbox runtime configuration |
 | `tasks/vega.json` | JSON array containing the initial VEGA Task template |
 | `LICENSE` | MIT license and retained attribution |
@@ -95,6 +96,14 @@ Use `fleet send TASK "MESSAGE"` for inbox delivery, then check delivery receipts
 queueing is not proof of delivery. A retained Concluded session can still receive
 feedback. The task-status skill explains execution identity, inboxes, declarations
 and forge observations.
+
+Mission Control can also use the configured runtime's documented CLI to prompt an
+existing owned Task session directly. That path is for coordination, not substantive
+work, and it does not create a Fleet inbox or delivery receipt. The task-status
+skill resolves the exact session from Fleet state, verifies runtime identity and
+safe input, distinguishes `sent`, `submitted`, `delivered_via` and process exit,
+and prevents direct-plus-durable duplicate delivery. FakeRuntime validates the
+starter lifecycle only; it does not simulate live local or remote terminal input.
 
 Every authorized forge worker must open changes as drafts, immediately run
 `fleet declare TASK --change-request URL`, and end every forge post with
@@ -140,9 +149,10 @@ portability; this does not replace native Windows runtime validation.
 
 The regression also checks that every installed prompt entry point expresses the
 dispatch-only boundary, representative work categories, repository-free isolated
-work and the narrow orchestration/status exception. These content assertions
-validate delivered guidance and CLI contracts; they cannot empirically prove
-that a language model will always obey prose.
+work, the orchestration/status exception, and the direct-versus-durable delivery
+contract. These content assertions validate delivered guidance and CLI contracts;
+they cannot empirically prove that a language model will always obey prose or that
+a simulated adapter proves live remote interaction.
 
 The v2.1.0 regression first failed because a clean installation lacked the forge
 worker rules. It now checks the installed guidance, executes the skill's optional

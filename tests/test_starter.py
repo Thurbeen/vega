@@ -79,6 +79,28 @@ class Starter(unittest.TestCase):
             for content in [intake, task_status]:
                 self.assertIn('required by the user or repository', content.lower())
                 self.assertIn('draft-only', content.lower())
+            # A clean install must let Mission Control coordinate an existing
+            # Task session without weakening the dispatch-only boundary. These
+            # are documentation contract checks; FakeRuntime does not simulate
+            # a live terminal or prove that an agent will obey the guidance.
+            direct_guidance = '\n'.join([instructions, mission_control, task_status])
+            for contract in [
+                'existing owned Task session',
+                'status.session',
+                'runtime.cli',
+                'session capture --lines 0 --json',
+                'session send UUID TEXT --json --strict',
+                'fleet send TASK TEXT',
+                'delivered_via',
+                'submitted',
+                'queued',
+                'working turn',
+                'FakeRuntime',
+            ]:
+                self.assertIn(contract.lower(), direct_guidance.lower())
+            self.assertIn('new substantive request', direct_guidance.lower())
+            self.assertIn('new task', direct_guidance.lower())
+            self.assertIn('--force', direct_guidance)
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())
