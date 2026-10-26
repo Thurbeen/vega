@@ -42,7 +42,7 @@ class Starter(unittest.TestCase):
         workspace_assets = {p.relative_to(ROOT).as_posix() for p in (ROOT / 'workspace').rglob('*') if p.is_file()}
         self.assertTrue(workspace_assets <= set(assets))
         fleet = os.environ.get('FLEET_BIN')
-        self.assertTrue(fleet, 'Set FLEET_BIN to the Task-only Fleet binary; integration is required')
+        self.assertTrue(fleet, 'Set FLEET_BIN to the compatible Fleet binary; integration is required')
         # Keep even the throwaway installation outside the system temp partition.
         with tempfile.TemporaryDirectory(prefix='vega-test-', dir=ROOT) as tmp:
             install = Path(tmp)
@@ -52,15 +52,24 @@ class Starter(unittest.TestCase):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / asset, target)
             (install / 'workspace').rename(workspace)
+            # Check the instructions a freshly installed Mission Control receives.
+            instructions = (workspace / 'AGENTS.md').read_text()
+            intake = (workspace / '.agents/skills/task-intake/SKILL.md').read_text()
+            for content in [instructions, intake]:
+                for rule in ['open every change as a draft',
+                             'fleet declare TASK --change-request URL',
+                             '<!-- fleet:worker <task uid> -->',
+                             'fleet get task TASK']:
+                    self.assertIn(rule, content)
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())
             self.assertEqual(production['runtime']['kind'], 'thurbox')
             self.assertEqual(production['version'], 1)
-            def run(*args, cfg=config):
+            def run(*args, cfg=config, json_output=True):
                 result = subprocess.run([fleet, '--config', str(cfg), *args], text=True, capture_output=True, timeout=20)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                return json.loads(result.stdout)
+                return json.loads(result.stdout) if json_output else result.stdout
             run('list', 'task', '--json')
             # Only the host transport changes; keep all supported production keys.
             fake = install / 'config/fake.toml'
@@ -91,6 +100,66 @@ class Starter(unittest.TestCase):
             self.assertTrue((workspace / 'AGENTS.md').is_file())
             for required in ['prompts/mission-control.md', '.agents/skills/task-intake/SKILL.md', '.agents/skills/task-status/SKILL.md']:
                 self.assertTrue((workspace / required).is_file())
+            # Execute the optional resource examples shipped in the intake skill.
+            examples = []
+            for block in intake.split('```json\n')[1:]:
+                examples.append(json.loads(block.split('```', 1)[0]))
+            self.assertEqual([r['kind'] for r in examples],
+                             ['Task', 'EnvProvider', 'TaskConfig', 'Task'])
+            provider, defaults, worker = examples[1:]
+            worker['spec']['workspace']['dir'] = str(workspace)
+            resources = install / 'configured.json'
+            resources.write_text(json.dumps([provider, defaults, worker]))
+            run('apply', '-f', str(resources), '--json', cfg=fake)
+            worker['spec']['dispatch'] = True
+            resources.write_text(json.dumps(worker))
+            run('apply', '-f', str(resources), '--json', cfg=fake)
+            run('reconcile', '--json', cfg=fake)
+            name = worker['metadata']['name']
+            configured = run('get', 'task', name, cfg=fake)
+            self.assertEqual(configured['status']['phase'], 'Briefed')
+            self.assertEqual(configured['status']['execution']['harness'], 'codex')
+            uid = configured['metadata']['uid']
+            snapshot = json.loads((install / f'config/data/launches/{uid}.json').read_text())
+            self.assertEqual(snapshot['env']['PROJECT_MODE'], 'focused')
+            defaults['spec']['env']['PROJECT_MODE'] = 'changed'
+            resources.write_text(json.dumps(defaults))
+            run('apply', '-f', str(resources), '--json', cfg=fake)
+            run('reconcile', '--json', cfg=fake)
+            self.assertEqual(json.loads((install / f'config/data/launches/{uid}.json').read_text()),
+                             snapshot)
+            self.assertNotIn('env', configured['status']['execution'])
+            # forge is mutable alongside dispatch; the brief generation stays fixed.
+            worker['spec']['forge'] = {'relay': {'notes': False}, 'draft': {'policy': None}}
+            resources.write_text(json.dumps(worker))
+            run('apply', '-f', str(resources), '--json', cfg=fake)
+            run('send', name, 'Verify the documentation too.', '--json', cfg=fake)
+            queued = run('get', 'task', name, cfg=fake)['status']['inbox'][0]
+            run('reconcile', '--json', cfg=fake)
+            delivered = run('get', 'task', name, cfg=fake)
+            self.assertFalse(delivered['status'].get('inbox'))
+            self.assertIn(queued['key'], [receipt['key'] for receipt in
+                                       delivered['status']['deliveries']['receipts']])
+            run('declare', name, '--json', '{"kind":"Note","text":"local validation"}', cfg=fake, json_output=False)
+            declared = run('get', 'task', name, cfg=fake)
+            self.assertEqual(declared['status']['declared'][0]['kind'], 'Note')
+            self.assertNotIn('result', declared['status'])
+            run('result', name, '--generation', str(configured['status']['brief']['generation']),
+                '--outcome', 'shipped', '--summary', 'Verified locally', cfg=fake, json_output=False)
+            run('reconcile', '--json', cfg=fake)
+            concluded = run('get', 'task', name, cfg=fake)
+            self.assertEqual(concluded['status']['phase'], 'Concluded')
+            self.assertEqual(configured['status']['session'], concluded['status']['session'])
+            # Declaration ensures a mirror; use only an offline fake forge.
+            fake.write_text(fake.read_text() + '\n[forge.hosts]\n"forge.example" = { kind = "fake", dir = "fake-forge" }\n')
+            url = 'https://forge.example/acme/widgets/pull/7'
+            run('declare', name, '--change-request', url, cfg=fake, json_output=False)
+            changes = run('list', 'changerequest', '--json', cfg=fake)
+            self.assertEqual(len(changes), 1)
+            self.assertEqual(changes[0]['spec']['url'], url)
+            self.assertEqual(run('get', 'task', name, cfg=fake)['status']['declared'][-1]['kind'],
+                             'ChangeRequest')
+
 
 
 if __name__ == '__main__':

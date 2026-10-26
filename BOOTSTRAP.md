@@ -16,6 +16,11 @@ branch or fetch starter content during first-run initialization.
    config file's parent. `runtime.kind` is `thurbox`, not the fake test host.
 3. Generate and persist a per-instance `runtime.keyPrefix` in place of template
    `fleet`. Independent installations must not claim one another's sessions.
+   Fleet v2.1.0 also renders `starter.workspace`, `data.dir` and the shipped
+   `[forge.readyPolicies]` tables (`checks`, `checks-and-bots`, `strict`). It
+   selects no `draftPolicy` and configures no forge hosts. An operator must
+   configure authenticated hosts before declaring changes; ready policies alone
+   do not enable forge access. Preserve existing user-owned config on update.
 4. Parse `tasks/vega.json` as a JSON array and set its sole Task's
    `spec.workspace.dir` to the absolute installed workspace path. The template's
    `{{workspace}}` is a whole string placeholder, not a shell expression.
@@ -25,7 +30,7 @@ branch or fetch starter content during first-run initialization.
    root selected by the engine. Its Task is `vega`, API `fleet/v1alpha1`, with
    harness `codex`, host `local` and dispatch enabled. Select any harness/model
    customization before initial creation; the stored Task spec is immutable
-   except for dispatch. Do not manufacture uid, status or finalizers.
+   except for dispatch and forge. Do not manufacture uid, status or finalizers.
 6. Apply through the Task API and persist identity. Repeated startup must inspect
    and reconnect to the existing Task, including its session and effect receipts.
    Do not regenerate identity, erase the store or spawn on an unknown probe.
@@ -50,5 +55,6 @@ record; content has no update executable.
 
 Fleet implements config discovery, init/up, reconciliation, locking, identity,
 recovery, update conflicts and prerequisite diagnostics. VEGA supplies only
-licensed content and typed templates. There is no VEGA controller or additional
-engine resource kind. No starter prompt uses the retired Python queue API.
+licensed content and typed templates. There is no VEGA controller. Fleet v2.1.0
+also serves TaskConfig, EnvProvider and ChangeRequest; the starter needs only its
+initial Task. No starter prompt uses the retired Python queue API.
