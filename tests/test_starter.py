@@ -54,13 +54,31 @@ class Starter(unittest.TestCase):
             (install / 'workspace').rename(workspace)
             # Check the instructions a freshly installed Mission Control receives.
             instructions = (workspace / 'AGENTS.md').read_text()
+            mission_control = (workspace / 'prompts/mission-control.md').read_text()
             intake = (workspace / '.agents/skills/task-intake/SKILL.md').read_text()
+            task_status = (workspace / '.agents/skills/task-status/SKILL.md').read_text()
+            task_template = (install / 'tasks/vega.json').read_text()
             for content in [instructions, intake]:
                 for rule in ['open every change as a draft',
                              'fleet declare TASK --change-request URL',
                              '<!-- fleet:worker <task uid> -->',
                              'fleet get task TASK']:
                     self.assertIn(rule, content)
+            # The installed prompt surface must make Mission Control an
+            # orchestration-only role for every substantive kind of request.
+            for category in ['design', 'implementation', 'bug fix', 'test',
+                             'research', 'review', 'writing', 'operational']:
+                self.assertIn(category, mission_control.lower())
+            for content in [instructions, mission_control, intake, task_template]:
+                self.assertIn('dispatch-only', content.lower())
+            for boundary in ['acknowledge', 'clarify', 'status']:
+                self.assertIn(boundary, mission_control.lower())
+            self.assertIn('without a repository', intake.lower())
+            self.assertIn('isolated', intake.lower())
+            self.assertIn('do not redo', task_status.lower())
+            for content in [intake, task_status]:
+                self.assertIn('required by the user or repository', content.lower())
+                self.assertIn('draft-only', content.lower())
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())
