@@ -64,9 +64,12 @@ authorize publication, merging or deployment. Workers do not merge.
 
 When an authorized deliverable is a pull or merge request, the worker is not
 done until it has produced and declared the real change URL. Verify the requested
-base plus required checks, CI and review evidence; a local commit or blocked gate
-is not completion. Do not impose publication on design, research, status or other
-Tasks whose requested result does not include it.
+base plus the checks, CI and review evidence required by the user or repository
+for that delivery stage; a local commit or blocked required gate is not completion.
+A draft-only deliverable may conclude after the declared URL and its required
+draft-stage gates, while Fleet continues following the change separately. Do not
+impose publication on design, research, status or other Tasks whose requested
+result does not include it.
 
 Declaration requires a delivered brief and configured forge host, and ensures a
 ChangeRequest mirror while recording the declaration on the Task. It does not

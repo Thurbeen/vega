@@ -76,6 +76,9 @@ class Starter(unittest.TestCase):
             self.assertIn('without a repository', intake.lower())
             self.assertIn('isolated', intake.lower())
             self.assertIn('do not redo', task_status.lower())
+            for content in [intake, task_status]:
+                self.assertIn('required by the user or repository', content.lower())
+                self.assertIn('draft-only', content.lower())
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())

@@ -86,8 +86,11 @@ and authorized artifact URLs when required. Do not report another worker's resul
 for it. Fleet stores the claim; it is not proof that a PR, CI or deployment succeeded.
 Forge observations provide separate evidence; inspect them when configured.
 For a user-authorized pull or merge request deliverable, verify a real declared
-URL, the requested base, required checks/CI and review evidence. A local commit,
-an undeclared change or blocked gates do not satisfy that result. Do not infer
-publication authorization for Tasks whose requested result did not include it.
+URL and the requested base. Verify everything required by the user or repository
+for that delivery stage, including checks, CI and review. A local commit, an
+undeclared change or blocked required gates do not satisfy that result. A
+draft-only deliverable
+does not require later ready/merge gates unless requested. Do not infer publication
+authorization for Tasks whose requested result did not include it.
 After reconciliation, Concluded keeps its session until deletion. Delete only
 when the user authorizes cleanup and the conversation no longer needs it.
