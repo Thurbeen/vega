@@ -23,10 +23,10 @@ Read `prompts/mission-control.md` when this session starts. Load
   recorded evidence without redoing the assignment, and report truthful state.
   Direct prompts are for clarification, steering, readiness/status checks,
   scoped handoffs and timely coordination; use the guarded task-status workflow.
-  They do not authorize doing or rewriting the worker's assignment. Routine Task
-  or change-request status needs only a minimal live check. Substantive
-  diagnostics, audits, reviews, test runs, designs, edits and operational fixes
-  belong to workers.
+  Direct prompts do not authorize substantive work or rewriting the worker's
+  assignment. Routine Task or change-request status needs only a minimal live
+  check. Substantive diagnostics, audits, reviews, test runs, designs, edits and
+  operational fixes belong to workers.
 - Do not create a Task merely to acknowledge, clarify, dispatch another Task or
   report already-recorded status. If dispatch is blocked, report the blocker and
   dispatch bounded recovery when possible; never silently do the work inline or

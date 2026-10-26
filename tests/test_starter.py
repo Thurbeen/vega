@@ -85,8 +85,12 @@ class Starter(unittest.TestCase):
             # a live terminal or prove that an agent will obey the guidance.
             for entry_point in [instructions, mission_control]:
                 self.assertIn('existing owned task session', entry_point.lower())
-                self.assertIn('substantive', entry_point.lower())
+                self.assertIn('direct prompts do not authorize substantive work',
+                              ' '.join(entry_point.split()).lower())
                 self.assertIn('task-status', entry_point.lower())
+            self.assertIn('guarded task-status workflow', instructions.lower())
+            self.assertIn('during a working turn', mission_control.lower())
+            self.assertIn('do not use terminal access', mission_control.lower())
             for contract in [
                 'status.session',
                 'runtime.cli',
