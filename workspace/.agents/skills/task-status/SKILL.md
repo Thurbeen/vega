@@ -100,11 +100,13 @@ Use this guarded workflow:
    ```
 
    Do not default to `--force`, clear the composer, press Escape or Ctrl-C, or
-   kill/interrupt a turn merely to deliver coordination. A key press is narrower:
-   for example, `session key UUID enter --json` may submit a verified coordinator
-   prompt previously typed with `--no-enter`. It must not approve a trust or
-   permission prompt. Use a bounded `--wait-turn --timeout SECONDS` or documented
-   event stream when available, never an agent-side polling loop.
+   kill/interrupt a turn merely to deliver coordination. A key press is narrower.
+   Capture again after `--no-enter`; verify the exact coordinator prompt remains
+   in the same composer, identity and foreground are unchanged, and no dialog or
+   shell replaced it. Only then may `session key UUID enter --json` submit that
+   known text. If any check is uncertain, do not press a key. It must not approve
+   a trust or permission prompt. Use a bounded `--wait-turn --timeout SECONDS` or
+   documented event stream when available, never an agent-side polling loop.
 
 Read the runtime JSON and process exit code together:
 

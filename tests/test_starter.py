@@ -83,9 +83,11 @@ class Starter(unittest.TestCase):
             # Task session without weakening the dispatch-only boundary. These
             # are documentation contract checks; FakeRuntime does not simulate
             # a live terminal or prove that an agent will obey the guidance.
-            direct_guidance = '\n'.join([instructions, mission_control, task_status])
+            for entry_point in [instructions, mission_control]:
+                self.assertIn('existing owned task session', entry_point.lower())
+                self.assertIn('substantive', entry_point.lower())
+                self.assertIn('task-status', entry_point.lower())
             for contract in [
-                'existing owned Task session',
                 'status.session',
                 'runtime.cli',
                 'session capture --lines 0 --json',
@@ -97,10 +99,18 @@ class Starter(unittest.TestCase):
                 'working turn',
                 'FakeRuntime',
             ]:
-                self.assertIn(contract.lower(), direct_guidance.lower())
-            self.assertIn('new substantive request', direct_guidance.lower())
-            self.assertIn('new task', direct_guidance.lower())
-            self.assertIn('--force', direct_guidance)
+                self.assertIn(contract.lower(), task_status.lower())
+            normalized_status = ' '.join(task_status.split()).lower()
+            for safety_rule in [
+                'Do not default to `--force`',
+                'not approve a trust or permission prompt',
+                'do not direct-send and durable-send the same instruction',
+                'capture again after `--no-enter`',
+                'same composer',
+            ]:
+                self.assertIn(safety_rule.lower(), normalized_status)
+            self.assertIn('new substantive request', task_status.lower())
+            self.assertIn('new task', task_status.lower())
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())
