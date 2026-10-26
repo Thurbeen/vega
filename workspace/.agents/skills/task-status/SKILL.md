@@ -21,6 +21,11 @@ result together. A phase alone is not sufficient evidence. Compare observations
 with the current spec generation, and the result's generation with the delivered
 brief; stale observations stay stale.
 
+Mission Control verifies the evidence relevant to the promised result. Do not redo
+the worker's substantive assignment. Delegate an independent review or
+diagnostic when verification itself requires substantive work. Routine Task and
+change-request status reporting may use the minimal live checks in this skill.
+
 | Observation | Report or action |
 | --- | --- |
 | Pending with dispatch false | Work has not been authorized to start. |
@@ -80,5 +85,9 @@ Replace the example generation and summary with actual evidence. Outcomes are
 and authorized artifact URLs when required. Do not report another worker's result
 for it. Fleet stores the claim; it is not proof that a PR, CI or deployment succeeded.
 Forge observations provide separate evidence; inspect them when configured.
+For a user-authorized pull or merge request deliverable, verify a real declared
+URL, the requested base, required checks/CI and review evidence. A local commit,
+an undeclared change or blocked gates do not satisfy that result. Do not infer
+publication authorization for Tasks whose requested result did not include it.
 After reconciliation, Concluded keeps its session until deletion. Delete only
 when the user authorizes cleanup and the conversation no longer needs it.

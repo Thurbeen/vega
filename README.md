@@ -5,6 +5,13 @@ engine. It contains instructions, prompts, two agent skills, a minimal runtime
 configuration and one initial Task. Fleet is the engine; VEGA is editable content
 running as an ordinary Task.
 
+VEGA is dispatch-only Mission Control. Every substantive requested deliverable—
+from design and research through implementation, review, writing and operations—
+runs in a bounded worker Task with its own prepared workspace. VEGA itself only
+routes and steers work, resolves dependencies, checks recorded evidence and
+reports state. A routine status check does not need a recursive Task; short or
+read-only work is not an exception to dispatch.
+
 This starter targets Fleet v2.1.0, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
 these are optional and the initial bundle still creates only Task `vega`.
@@ -130,6 +137,12 @@ brief and repeatedly reconcile VEGA without duplicating its identity. It uses a
 workspace path containing spaces and removes its own temporary tree. A second
 end-to-end run simulates Windows relative-path separators to check manifest
 portability; this does not replace native Windows runtime validation.
+
+The regression also checks that every installed prompt entry point expresses the
+dispatch-only boundary, representative work categories, repository-free isolated
+work and the narrow orchestration/status exception. These content assertions
+validate delivered guidance and CLI contracts; they cannot empirically prove
+that a language model will always obey prose.
 
 The v2.1.0 regression first failed because a clean installation lacked the forge
 worker rules. It now checks the installed guidance, executes the skill's optional

@@ -1,10 +1,19 @@
 ---
 name: task-intake
-description: Create or dispatch bounded work as a Task in Fleet v2.1.0. Load when a user requests new work or asks Mission Control to start a worker.
+description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever a user requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
 # Create a Task
+
+VEGA is dispatch-only: every substantive requested deliverable belongs to a
+worker Task, including design/planning/RFCs, implementation, bug fixing, tests,
+research/investigation, reviews/audits, writing/reports/visual artifacts,
+operational changes, maintenance, cleanup and other work. Shortness, read-only
+scope, convenience or urgency is not an exception. A request without a repository
+still receives an isolated prepared workspace, one owner and a concrete result.
+Acknowledgement, clarification, dispatch itself and routine reporting of recorded
+Task or change-request status do not need recursive Tasks.
 
 Read workspace and target-repository instructions first. Run `fleet apply --help`
 and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`.
@@ -15,11 +24,15 @@ resolved path in each child brief and require it for every Fleet operation.
 
 ## Prepare
 
-Confirm the request's repository, intended result, necessary permissions and
-checks. Prepare a separate existing absolute workspace directory on the target
-host. A Task does not create a checkout or isolate files for you. Read the
-repository's instructions to choose the harness; verify it is installed and
-already authenticated. Choose a unique lowercase DNS-like Task name.
+Confirm the request's repository when one exists, intended result, necessary
+permissions and checks. Retain the user's requested serial order, permitted
+parallel lanes, skipped work and publication/merge/deploy limits in briefs and
+follow-up steering. Prepare a separate existing absolute workspace directory on
+the target host. A Task does not create a checkout or isolate files for you. For
+repository-free work, create a dedicated directory containing only inputs and
+artifacts needed for that Task. Read only the repository instructions necessary
+to choose and brief the harness; verify it is installed and already authenticated.
+Choose a unique lowercase DNS-like Task name.
 
 Write a JSON file using the following shape, replacing every example value.
 Use a JSON serializer for values containing quotes, slashes or newlines.
@@ -48,6 +61,12 @@ forge post with `<!-- fleet:worker <task uid> -->` on its own line, obtaining th
 uid from `fleet get task TASK`. Use the repository's publishing skill, or the
 installed publish skill if the repository has none. Creating a Task does not
 authorize publication, merging or deployment. Workers do not merge.
+
+When an authorized deliverable is a pull or merge request, the worker is not
+done until it has produced and declared the real change URL. Verify the requested
+base plus required checks, CI and review evidence; a local commit or blocked gate
+is not completion. Do not impose publication on design, research, status or other
+Tasks whose requested result does not include it.
 
 Declaration requires a delivered brief and configured forge host, and ensures a
 ChangeRequest mirror while recording the declaration on the Task. It does not
@@ -139,6 +158,11 @@ occurs. Config/provider specs are mutable; frozen Task execution is unchanged.
 4. The engine's running `fleet up` reconciles it. For a deliberately bounded
    manual run, use `fleet reconcile --max-passes 10 --json`.
 5. Use task-status to read the recorded result and verify the evidence.
+
+If the engine, authentication, resources or another prerequisite blocks dispatch,
+report that exact blocker and create a bounded recovery Task when possible. If no
+dispatch is possible, say so plainly. Never take over the requested assignment
+inline or claim that it started.
 
 Only `dispatch` and `forge` are mutable in an existing Task spec. A new request
 needs a new Task. Do not supply status, uid, generation or ownerReferences on create.
