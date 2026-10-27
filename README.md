@@ -13,6 +13,12 @@ Task session, resolves dependencies, checks recorded evidence and reports state.
 A routine status check does not need a recursive Task; short or read-only work is
 not an exception to dispatch.
 
+Standing rules live once, in `workspace/AGENTS.md`; the startup prompt holds only
+the startup steps. The task-intake skill defines the worker brief: the user's
+request verbatim, then Goal, Constraints, Coordination and Done means, written
+for a worker that shares no context, ending in the exact Fleet commands that
+record its result against Mission Control's configuration.
+
 This starter targets Fleet v2.1.0, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
 these are optional and the initial bundle still creates only Task `vega`.
@@ -55,7 +61,7 @@ this checkout, its Git directory, tests, local configuration or arbitrary files.
 | --- | --- |
 | `workspace/AGENTS.md` | VEGA's workspace instructions |
 | `workspace/prompts/mission-control.md` | Startup and coordination prompt |
-| `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a Task |
+| `workspace/.agents/skills/task-intake/SKILL.md` | Write a worker brief, then create and dispatch its Task |
 | `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
 | `config/fleet.toml` | Working Thurbox runtime configuration |
 | `tasks/vega.json` | JSON array containing the initial VEGA Task template |
@@ -147,10 +153,20 @@ workspace path containing spaces and removes its own temporary tree. A second
 end-to-end run simulates Windows relative-path separators to check manifest
 portability; this does not replace native Windows runtime validation.
 
-The regression also checks that every installed prompt entry point expresses the
+The regression also checks that the installed guidance expresses the
 dispatch-only boundary, representative work categories, repository-free isolated
 work, the orchestration/status exception, and the direct-versus-durable delivery
-contract. These content assertions validate delivered guidance and CLI contracts;
+contract.
+
+Two acceptance scenarios cover the brief and the startup surface. The skill's
+example brief is dispatched through FakeRuntime, and the text the session
+received must carry the five brief headings and Fleet commands that, run as
+written against the test store, declare a change and conclude the Task. The
+always-loaded startup context (workspace instructions, startup prompt and VEGA
+brief) must stay within 1000 words, and each forge contract literal must have
+one home among shipped files. Both scenarios first failed on the 0.4.0 content:
+its example brief had no sections or runnable result command, and the startup
+context was 1404 words with the forge rules stated twice. These content assertions validate delivered guidance and CLI contracts;
 they cannot empirically prove that a language model will always obey prose or that
 a simulated adapter proves live remote interaction.
 
