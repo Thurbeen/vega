@@ -1,6 +1,8 @@
 """Exercise distributable assets through the installed Fleet Task API."""
 import json
 import os
+import re
+import shlex
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import subprocess
@@ -58,21 +60,20 @@ class Starter(unittest.TestCase):
             intake = (workspace / '.agents/skills/task-intake/SKILL.md').read_text()
             task_status = (workspace / '.agents/skills/task-status/SKILL.md').read_text()
             task_template = (install / 'tasks/vega.json').read_text()
-            for content in [instructions, intake]:
-                for rule in ['open every change as a draft',
-                             'fleet declare TASK --change-request URL',
-                             '<!-- fleet:worker <task uid> -->',
-                             'fleet get task TASK']:
-                    self.assertIn(rule, content)
+            for rule in ['open every change as a draft',
+                         'fleet declare TASK --change-request URL',
+                         '<!-- fleet:worker <task uid> -->',
+                         'fleet get task TASK']:
+                self.assertIn(rule, ' '.join(intake.split()))
             # The installed prompt surface must make Mission Control an
             # orchestration-only role for every substantive kind of request.
             for category in ['design', 'implementation', 'bug fix', 'test',
                              'research', 'review', 'writing', 'operational']:
-                self.assertIn(category, mission_control.lower())
+                self.assertIn(category, instructions.lower())
             for content in [instructions, mission_control, intake, task_template]:
                 self.assertIn('dispatch-only', content.lower())
             for boundary in ['acknowledge', 'clarify', 'status']:
-                self.assertIn(boundary, mission_control.lower())
+                self.assertIn(boundary, instructions.lower())
             self.assertIn('without a repository', intake.lower())
             self.assertIn('isolated', intake.lower())
             self.assertIn('do not redo', task_status.lower())
@@ -83,14 +84,13 @@ class Starter(unittest.TestCase):
             # Task session without weakening the dispatch-only boundary. These
             # are documentation contract checks; FakeRuntime does not simulate
             # a live terminal or prove that an agent will obey the guidance.
-            for entry_point in [instructions, mission_control]:
-                self.assertIn('existing owned task session', entry_point.lower())
-                self.assertIn('direct prompts do not authorize substantive work',
-                              ' '.join(entry_point.split()).lower())
-                self.assertIn('task-status', entry_point.lower())
-            self.assertIn('guarded task-status workflow', instructions.lower())
-            self.assertIn('during a working turn', mission_control.lower())
-            self.assertIn('do not use terminal access', mission_control.lower())
+            normalized_instructions = ' '.join(instructions.split()).lower()
+            for rule in ['existing owned task session',
+                         'direct prompts do not authorize substantive work',
+                         'guarded task-status workflow',
+                         'do not use terminal access']:
+                self.assertIn(rule, normalized_instructions)
+            self.assertIn('task-status', mission_control.lower())
             for contract in [
                 'status.session',
                 'runtime.cli',
@@ -213,6 +213,148 @@ class Starter(unittest.TestCase):
             self.assertEqual(changes[0]['spec']['url'], url)
             self.assertEqual(run('get', 'task', name, cfg=fake)['status']['declared'][-1]['kind'],
                              'ChangeRequest')
+
+
+
+# Headings every worker brief carries, in order. A worker shares no context
+# with Mission Control, so these are the only places it learns the request,
+# its limits, the work around it and how to finish.
+BRIEF_SECTIONS = ['Request', 'Goal', 'Constraints', 'Coordination', 'Done means']
+EXAMPLE_CONFIG = '/absolute/path/to/fleet.toml'
+# Always-loaded Mission Control context: workspace instructions, startup
+# prompt and the initial Task brief. Skills load on demand and are excluded.
+STARTUP_WORD_BUDGET = 1000
+
+
+class Install:
+    """A throwaway allowlisted installation driven by the real Fleet CLI."""
+
+    def __init__(self, case, tmp):
+        self.case = case
+        self.fleet = os.environ.get('FLEET_BIN')
+        case.assertTrue(self.fleet, 'Set FLEET_BIN to the compatible Fleet binary; integration is required')
+        self.root = Path(tmp)
+        for asset in tomllib.loads((ROOT / 'starter.toml').read_text())['files']:
+            target = self.root / asset
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / asset, target)
+        self.workspace = self.root / 'workspace'
+        runtime = tomllib.loads((self.root / 'config/fleet.toml').read_text())['runtime']
+        runtime['kind'] = 'fake'
+        self.config = self.root / 'config/fake.toml'
+        self.config.write_text(
+            'version = 1\n[data]\ndir = "data"\n[runtime]\n'
+            + '\n'.join(f'{key} = {json.dumps(value)}' for key, value in runtime.items())
+            + '\ndir = "fake-host"\n'
+            + '[forge.hosts]\n"forge.example" = { kind = "fake", dir = "fake-forge" }\n')
+
+    def read(self, asset):
+        return (self.root / asset).read_text()
+
+    def run(self, *args, json_output=True):
+        result = subprocess.run([self.fleet, '--config', str(self.config), *args],
+                                text=True, capture_output=True, timeout=20)
+        self.case.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout) if json_output else result.stdout
+
+    def apply(self, resource):
+        path = self.root / f'{resource["metadata"]["name"]}.json'
+        path.write_text(json.dumps(resource))
+        self.run('apply', '-f', str(path), '--json')
+
+    def delivered_text(self, name):
+        """What the FakeRuntime session for Task NAME actually received."""
+        key = self.run('get', 'task', name)['status']['session']['key']
+        state = json.loads((self.config.parent / 'fake-host/state.json').read_text())
+        return state['sessions'][key]['texts']
+
+
+def brief_sections(brief):
+    """Map each `## Heading` of a brief to its body, in order."""
+    sections = {}
+    current = None
+    for line in brief.splitlines():
+        if line.startswith('## '):
+            current = line[3:].strip()
+            sections[current] = []
+        elif current is not None:
+            sections[current].append(line)
+    return {name: '\n'.join(body).strip() for name, body in sections.items()}
+
+
+class Briefs(unittest.TestCase):
+    """Acceptance scenarios for what Mission Control hands to a worker."""
+
+    def test_shipped_worker_brief_alone_lets_a_worker_finish(self):
+        # A worker reads nothing but its delivered brief. The shipped example
+        # must therefore carry the request, scope, coordination and an exact,
+        # runnable way to record its result against Mission Control's store.
+        with tempfile.TemporaryDirectory(prefix='vega-test-', dir=ROOT) as tmp:
+            install = Install(self, tmp)
+            intake = install.read('workspace/.agents/skills/task-intake/SKILL.md')
+            self.assertIn('```markdown\n', intake, 'task-intake ships no example worker brief')
+            brief = intake.split('```markdown\n')[1].split('```\n', 1)[0].strip()
+            task = json.loads(intake.split('```json\n')[1].split('```', 1)[0])
+            name = task['metadata']['name']
+            # Mission Control serializes the brief and renders its config and workspace.
+            task['spec']['brief'] = brief.replace(EXAMPLE_CONFIG, str(install.config))
+            task['spec']['workspace']['dir'] = str(install.workspace)
+            self.assertFalse(task['spec']['dispatch'])
+            install.apply(task)
+            task['spec']['dispatch'] = True
+            install.apply(task)
+            install.run('reconcile', '--json')
+            [delivered] = install.delivered_text(name)
+            self.assertEqual(delivered, task['spec']['brief'])
+            sections = brief_sections(delivered)
+            self.assertEqual(list(sections), BRIEF_SECTIONS,
+                             'delivered brief lacks the ordered worker sections')
+            for section, body in sections.items():
+                self.assertTrue(body, f'empty brief section {section}')
+            self.assertNotIn('{{', delivered)
+            # Run the brief's own Fleet commands exactly as a worker would.
+            commands = [shlex.split(c) for c in re.findall(r'`(fleet --config [^`]+)`', delivered)]
+            self.assertTrue(commands, 'delivered brief names no runnable Fleet command')
+            for command in commands:
+                self.assertEqual(command[2], str(install.config),
+                                 'brief command does not address Mission Control config')
+            verbs = {command[3]: command for command in commands}
+            self.assertLessEqual({'get', 'declare', 'result'}, set(verbs))
+            uid = install.run(*verbs['get'][3:])['metadata']['uid']
+            self.assertIn('<!-- fleet:worker <task uid> -->', sections['Done means'])
+            self.assertIn('draft', sections['Done means'])
+            url = 'https://forge.example/acme/widgets/pull/7'
+            install.run(*[url if arg == 'URL' else arg for arg in verbs['declare'][3:]],
+                        json_output=False)
+            generation = install.run('get', 'task', name)['status']['brief']['generation']
+            fill = {'GENERATION': str(generation), 'OUTCOME': 'shipped',
+                    'SUMMARY': f'Fixed; checks pass; {uid}', 'URL': url}
+            install.run(*[fill.get(arg, arg) for arg in verbs['result'][3:]], json_output=False)
+            install.run('reconcile', '--json')
+            concluded = install.run('get', 'task', name)
+            self.assertEqual(concluded['status']['phase'], 'Concluded')
+            self.assertEqual(concluded['status']['declared'][-1]['kind'], 'ChangeRequest')
+
+    def test_startup_context_is_small_and_each_standing_rule_has_one_home(self):
+        # Every word of the always-loaded surface is read on each start and
+        # competes with the user's request. Repeated rules drift apart.
+        with tempfile.TemporaryDirectory(prefix='vega-test-', dir=ROOT) as tmp:
+            install = Install(self, tmp)
+            startup = [install.read('workspace/AGENTS.md'),
+                       install.read('workspace/prompts/mission-control.md'),
+                       json.loads(install.read('tasks/vega.json'))[0]['spec']['brief']]
+            words = sum(len(text.split()) for text in startup)
+            self.assertLessEqual(words, STARTUP_WORD_BUDGET,
+                                 f'always-loaded startup context is {words} words')
+            shipped = {asset: install.read(asset) for asset in
+                       tomllib.loads((ROOT / 'starter.toml').read_text())['files']
+                       if asset.startswith(('workspace/', 'tasks/'))}
+            for rule in ['<!-- fleet:worker <task uid> -->',
+                         'fleet declare TASK --change-request URL',
+                         'Short, read-only, urgent or repository-free work']:
+                homes = [asset for asset, text in shipped.items()
+                         if rule in ' '.join(text.split())]
+                self.assertEqual(len(homes), 1, f'{rule!r} is stated in {homes}')
 
 
 

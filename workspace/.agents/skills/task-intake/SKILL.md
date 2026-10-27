@@ -1,81 +1,111 @@
 ---
 name: task-intake
-description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Brief and dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever a user requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
-# Create a Task
+# Brief and dispatch a Task
 
-VEGA is dispatch-only: every substantive requested deliverable belongs to a
-worker Task, including design/planning/RFCs, implementation, bug fixing, tests,
-research/investigation, reviews/audits, writing/reports/visual artifacts,
-operational changes, maintenance, cleanup and other work. Shortness, read-only
-scope, convenience or urgency is not an exception. A request without a repository
-still receives an isolated prepared workspace, one owner and a concrete result.
-Acknowledgement, clarification, dispatch itself and routine reporting of recorded
-Task or change-request status do not need recursive Tasks.
+VEGA is dispatch-only; `AGENTS.md` says what goes to a worker. This skill turns
+a request into a worker brief and a `fleet/v1alpha1` Task. Run
+`fleet apply --help` and `fleet version --json` first. Every command uses
+Mission Control's exact configuration, `fleet --config PATH`, never a guessed
+default store, and every brief repeats that path.
 
-Read workspace and target-repository instructions first. Run `fleet apply --help`
-and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`.
-Use the same configuration as Mission Control, never a guessed default store.
-Every command below assumes that exact path in `FLEET_CONFIG`; use
-`fleet --config PATH` explicitly when inheritance is uncertain. Include the
-resolved path in each child brief and require it for every Fleet operation.
+## 1. Shape the work
 
-## Prepare
+Name the concrete result, the repository and base if any, the checks that prove
+it and exactly what the user authorized. Give each Task one result and one
+owner. Prepare a separate existing absolute workspace on the target host: a Task
+does not create a checkout or isolate files. Work without a repository still
+gets an isolated directory holding only its inputs and outputs. Read only the
+target repository instructions needed to pick the harness and the checks, and
+verify that harness is installed and authenticated. Choose a unique lowercase
+DNS-like Task name.
 
-Confirm the request's repository when one exists, intended result, necessary
-permissions and checks. Retain the user's requested serial order, permitted
-parallel lanes, skipped work and publication/merge/deploy limits in briefs and
-follow-up steering. Prepare a separate existing absolute workspace directory on
-the target host. A Task does not create a checkout or isolate files for you. For
-repository-free work, create a dedicated directory containing only inputs and
-artifacts needed for that Task. Read only the repository instructions necessary
-to choose and brief the harness; verify it is installed and already authenticated.
-Choose a unique lowercase DNS-like Task name.
+## 2. Write the brief
 
-Write a JSON file using the following shape, replacing every example value.
-Use a JSON serializer for values containing quotes, slashes or newlines.
+The worker shares no context with you or with other workers and reads its brief
+once. Write it from scratch under these five headings, in order:
+
+| Heading | Contents |
+| --- | --- |
+| `## Request` | The user's words, quoted verbatim, so the worker can check your reading against the source. |
+| `## Goal` | The outcome, plus each task-specific fact the worker cannot read from the repository: repository, base or commit, prepared workspace, state seen at routing marked as a snapshot to confirm. |
+| `## Constraints` | What it must not do, each with the failure it prevents, and the authorization limit. |
+| `## Coordination` | Other Tasks it could collide with or wait on, and what to do about each; `None.` when there are none. |
+| `## Done means` | The artifact and checks that end the Task, then the exact Fleet commands to record its result. |
+
+- Keep every measured fact: commits, URLs, paths, counts, exact errors and the
+  past failure behind a constraint. Cut persuasion and background the worker
+  cannot act on.
+- Do not retype standing policy the worker already reads: the target
+  repository's instructions and gate, or the user's global agent rules. Tell it
+  which files to read; a retyped copy drifts.
+- Coordination holds only what the worker can act on. Your queue, other users'
+  work and the order of later Tasks stay with you.
+- Select the harness and model in the Task spec or a TaskConfig, not in prose.
+- For an implementation, require the repository's tests and gate in Done means;
+  for a reported bug, a failing end-to-end reproducer before the fix. For a
+  review, name the exact commit and base and the outcome rule.
+- Include the forge rules below only when opening a change is authorized.
+
+Example brief for an authorized draft pull request:
+
+```markdown
+## Request
+"Logins from the mobile app land on the home page instead of where they started. Fix it and open a draft PR."
+
+## Goal
+Make a mobile login return to the page it started from. The prepared worktree is /absolute/path/to/prepared-workspace, branch fix-login-redirect from the repository's main branch. At routing, the issue says the `next` parameter is lost on the mobile sign-in route; confirm current behavior before relying on it.
+
+## Constraints
+- Write a failing end-to-end reproducer before changing code, so the fix is shown to cover the reported route.
+- Change only redirect handling; report other defects found instead of fixing them.
+- A draft pull request is authorized. Marking it ready, merging and deploying are not.
+
+## Coordination
+None.
+
+## Done means
+The repository's required checks pass and a draft pull request holds the reproducer and fix. Open it as a draft, declare it at once with `fleet --config /absolute/path/to/fleet.toml declare fix-login-redirect --change-request URL`, and end every forge post with `<!-- fleet:worker <task uid> -->` on its own line, taking the uid from `fleet --config /absolute/path/to/fleet.toml get task fix-login-redirect`. Then record your result with that Task's `status.brief.generation`: `fleet --config /absolute/path/to/fleet.toml result fix-login-redirect --generation GENERATION --outcome OUTCOME --summary SUMMARY --artifact URL`.
+```
+
+Serialize the brief into the Task with a JSON serializer, never by hand:
 
 ```json
 {
   "apiVersion": "fleet/v1alpha1",
   "kind": "Task",
-  "metadata": {"name": "inspect-project"},
+  "metadata": {"name": "fix-login-redirect"},
   "spec": {
     "harness": "codex",
     "host": "local",
-    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Record the result through fleet result using the generation of the delivered brief.",
+    "brief": "<the brief above>",
     "workspace": {"dir": "/absolute/path/to/prepared-workspace"},
     "dispatch": false
   }
 }
 ```
 
-## Forge worker brief
+## 3. Changes on a forge
 
-When opening a change is authorized, include these rules in the brief and keep
-these rules yourself: open every change as a draft; run
-`fleet declare TASK --change-request URL` immediately after opening it; end every
-forge post with `<!-- fleet:worker <task uid> -->` on its own line, obtaining the
-uid from `fleet get task TASK`. Use the repository's publishing skill, or the
-installed publish skill if the repository has none. Creating a Task does not
-authorize publication, merging or deployment. Workers do not merge.
+When opening a change is authorized, the brief requires three rules: open every
+change as a draft; run `fleet declare TASK --change-request URL` immediately
+after opening it; end every forge post with `<!-- fleet:worker <task uid> -->`
+on its own line, the uid from `fleet get task TASK`. Fleet follows only declared
+changes, never marks ready a change opened ready, and relays an unmarked post
+back as feedback. Name the repository's publishing skill, or the installed
+publish skill if it has none. Workers do not merge.
 
-When an authorized deliverable is a pull or merge request, the worker is not
-done until it has produced and declared the real change URL. Verify the requested
-base plus the checks, CI and review evidence required by the user or repository
-for that delivery stage; a local commit or blocked required gate is not completion.
-A draft-only deliverable may conclude after the declared URL and its required
-draft-stage gates, while Fleet continues following the change separately. Do not
-impose publication on design, research, status or other Tasks whose requested
-result does not include it.
-
-Declaration requires a delivered brief and configured forge host, and ensures a
-ChangeRequest mirror while recording the declaration on the Task. It does not
-conclude the Task. Follow feedback through its inbox; a result does not end forge
-following or release the session. Fleet follows only declared changes, never
-marks ready a change opened ready, and relays unmarked posts back as feedback.
+A pull or merge request deliverable is done only with a real declared URL on the
+requested base and the checks, CI and review required by the user or repository
+for that delivery stage; a local commit or blocked gate is not completion. A
+draft-only deliverable may conclude after its declared URL and draft-stage gates
+while Fleet keeps following the change. Declaration needs a delivered brief and a
+configured forge host; it does not conclude the Task, and a result does not end
+forge following: feedback arrives through the inbox. Do not add publication to
+Tasks whose requested result does not include it.
 
 ## Optional execution defaults (Fleet v2.1.0)
 
@@ -114,7 +144,7 @@ Apply a provider, then its config, then the Task, for example:
   "spec": {
     "configRef": {"name": "reviewer"},
     "env": {"PROJECT_MODE": "focused"},
-    "brief": "Review the repository instructions and report findings. Do not publish. Record your result with the delivered brief generation.",
+    "brief": "## Request\n\"Review the open parser change.\"\n\n## Goal\nReview the commit checked out in the prepared workspace against its base.\n\n## Constraints\nReview only: do not edit, push or post.\n\n## Coordination\nNone.\n\n## Done means\nFindings with file and line, recorded with `fleet --config /absolute/path/to/fleet.toml result configured-review --generation GENERATION --outcome OUTCOME --summary SUMMARY`.",
     "workspace": {"dir": "/absolute/path/to/prepared-workspace"},
     "dispatch": false
   }
