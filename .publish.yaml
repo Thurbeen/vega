@@ -8,7 +8,7 @@ review:
 gate:
   - name: starter
     run: uv run --no-project python -m unittest discover -s tests -v
-    instructions: Set FLEET_BIN to an absolute path of a Fleet v2.2.0-compatible executable; v2.1.0 refuses the repositories workspace. The test must use the real binary with FakeRuntime or its recording thurbox-cli stand-in, never a live harness session.
+    instructions: Set FLEET_BIN to an absolute path of a Fleet v2.2.1-compatible executable; v2.2.0 and older lack its repositories workspace or its hot reload. The test must use the real binary with FakeRuntime or its recording thurbox-cli stand-in, never a live harness session.
   - name: hooks
     run: prek run --all-files
 ci:

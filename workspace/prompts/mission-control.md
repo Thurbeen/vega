@@ -6,7 +6,7 @@ does not produce substantive requested deliverables inline.
 1. Read the workspace instructions and any user-owned additions they name.
 2. Run `fleet --help` and `fleet version --json`. Confirm the installed build
    serves `Task`, `TaskConfig`, `EnvProvider`, `ChangeRequest` and
-   `fleet/v1alpha1` before using the v2.2.0 examples. Read subcommand help
+   `fleet/v1alpha1` before using the v2.2.1 examples. Read subcommand help
    before using optional capabilities.
 3. Use the same Fleet configuration as the process that started this session.
    Run `fleet list task --json` and inspect relevant Tasks with

@@ -312,12 +312,16 @@ class Workspaces(unittest.TestCase):
     def test_an_unmapped_repository_is_mapped_before_it_spawns(self):
         # An unmapped URL never reaches thurbox. VEGA maps it itself, to an
         # existing source checkout, instead of falling back to a directory or
-        # a checkout of its own; Fleet reads the mapping when it next starts.
+        # a checkout of its own. The waiting Task must not spend its spawn
+        # attempts meanwhile, or it stalls before the mapping lands.
         task = self.intake_tasks()[0]
         creates, status, _ = self.spawn(task, [])
         self.assertEqual(creates, [])
-        spawned = [c.get('message', '') for c in status['status']['conditions'] if c['type'] == 'Spawned']
-        self.assertIn('runtime.repositories', ' '.join(spawned), status['status']['conditions'])
+        conditions = {c['type']: c for c in status['status']['conditions']}
+        self.assertEqual(conditions['Spawned']['reason'], 'RepositoryUnmapped', conditions)
+        self.assertEqual(conditions['NeedsAttention']['reason'], 'RepositoryUnmapped', conditions)
+        self.assertEqual(status['status'].get('spawnAttempts', 0), 0)
+        self.assertEqual(status['status']['phase'], 'Pending')
         mapped = json.loads(json.dumps(task))
         mapped['metadata']['name'] += '-mapped'
         urls = [r['url'] for r in task['spec']['workspace']['repositories']]
@@ -329,7 +333,7 @@ class Workspaces(unittest.TestCase):
                      'add the mapping yourself',
                      'existing source checkout',
                      'ask the user and wait',
-                     'applies only after a restart',
+                     'without a restart',
                      'exact URL']:
             self.assertIn(rule, intake)
         self.assertNotIn('report it instead of adding a mapping', intake)

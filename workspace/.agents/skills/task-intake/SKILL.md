@@ -1,6 +1,6 @@
 ---
 name: task-intake
-description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.2.0. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.2.1. Load whenever a user requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
@@ -58,9 +58,12 @@ Give each Task its own workspace, in exactly one of two forms:
        Only when it exits 0, keep the old config as a backup and put the
        candidate in its place; then remove the scratch directory. A
        `fleet list` passing proves nothing: it does not open the runtime.
-    3. Fleet reads its config when `fleet up` starts, so the mapping applies
-       only after a restart. Ask the user to restart the engine; do not stop
-       it yourself. Keep the Task at `dispatch: false` until then.
+    3. A running `fleet up` re-reads `runtime.repositories` before each sweep,
+       so the mapping applies without a restart. A Task dispatched before it
+       waits in Pending with `NeedsAttention`/`RepositoryUnmapped` and spawns
+       within about 30 seconds of the mapping. An invalid edit leaves the last
+       valid mapping in force. Other config settings still need a restart:
+       leave those to the user, and never stop the engine yourself.
   - `ref` is optional and opaque to Fleet. Thurbox uses it as the base of a
     worktree created in the mapped source checkout, and it does not fetch, so
     name a remote-tracking ref such as `origin/main` and have the worker confirm

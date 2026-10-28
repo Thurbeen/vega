@@ -8,7 +8,7 @@ license: MIT
 
 Run `fleet version --json` and use the exact Mission Control configuration
 for every operation, explicitly with `fleet --config PATH` or inherited
-`FLEET_CONFIG`. These examples require Fleet v2.2.0 capabilities.
+`FLEET_CONFIG`. These examples require Fleet v2.2.1 capabilities.
 
 ```text
 fleet list task --json
