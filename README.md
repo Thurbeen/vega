@@ -24,7 +24,10 @@ record its result against Mission Control's configuration.
 
 This starter targets Fleet v2.1.0, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
-these are optional and the initial bundle still creates only Task `vega`.
+these are optional and the initial bundle still creates only Task `vega`. Its
+guidance also uses the runtime-owned `repositories` workspace from
+Thurbeen/fleet#329, which no release contains yet; see
+[Workspaces and issues](#workspaces-and-issues).
 The `fleet init` / `fleet up` flow requires Fleet's bootstrap implementation;
 it is not supported by the Python v1 CLI. This repository does not install an
 engine or authenticate a harness.
@@ -231,5 +234,6 @@ required before publication. See [.publish.yaml](.publish.yaml).
 MIT, copyright 2026 Thurbeen. The license is retained from Fleet's public MIT
 license. The forge worker rules are retained from Fleet v2.1.0's bundled VEGA
 workspace. Other workspace guidance is informed by that release's public resource
-and configuration contracts and checked against the installed v2.1.0 CLI. Legacy
-Python queue skills and operator configuration were not copied.
+and configuration contracts and checked against the v2.1.0 CLI and a build of
+Thurbeen/fleet#329. Legacy Python queue skills and operator configuration were
+not copied.
