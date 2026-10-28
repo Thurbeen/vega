@@ -1,6 +1,6 @@
 ---
 name: task-intake
-description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.2.1. Load whenever a user requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
@@ -11,12 +11,15 @@ worker Task, including design/planning/RFCs, implementation, bug fixing, tests,
 research/investigation, reviews/audits, writing/reports/visual artifacts,
 operational changes, maintenance, cleanup and other work. Shortness, read-only
 scope, convenience or urgency is not an exception. A request without a repository
-still receives an isolated prepared workspace, one owner and a concrete result.
+still gets one owner, a concrete result and an isolated workspace, which is a
+`dir` only when the user explicitly asks for it.
 Acknowledgement, clarification, dispatch itself and routine reporting of recorded
 Task or change-request status do not need recursive Tasks.
 
 Read workspace and target-repository instructions first. Run `fleet apply --help`
-and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`.
+and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`, and
+needs an engine that reports `version` 2.2.1 or later. On an older engine, tell
+the user it must be upgraded before you rely on the workspace rules below.
 Use the same configuration as Mission Control, never a guessed default store.
 Every command below assumes that exact path in `FLEET_CONFIG`; use
 `fleet --config PATH` explicitly when inheritance is uncertain. Include the
@@ -27,12 +30,63 @@ resolved path in each child brief and require it for every Fleet operation.
 Confirm the request's repository when one exists, intended result, necessary
 permissions and checks. Retain the user's requested serial order, permitted
 parallel lanes, skipped work and publication/merge/deploy limits in briefs and
-follow-up steering. Prepare a separate existing absolute workspace directory on
-the target host. A Task does not create a checkout or isolate files for you. For
-repository-free work, create a dedicated directory containing only inputs and
-artifacts needed for that Task. Read only the repository instructions necessary
-to choose and brief the harness; verify it is installed and already authenticated.
-Choose a unique lowercase DNS-like Task name.
+follow-up steering. Read only the repository instructions necessary to choose
+and brief the harness; verify it is installed and already authenticated. Choose
+a unique lowercase DNS-like Task name.
+
+Give each Task its own workspace, in exactly one of two forms:
+
+- `{"repositories": [{"name", "url", "ref"}]}` for every Task. The runtime
+  owns the checkout: it materializes the repositories for this Task alone, on a
+  branch it names, and cleans them up when the Task's session is deleted. Never
+  clone, add a worktree or prepare a checkout yourself, and never name a branch
+  in the spec; Fleet has no branch, base, worktree or cleanup field.
+  - Use the exact URL mapped in the Mission Control config's
+    `runtime.repositories`, for example the canonical
+    `https://github.com/OWNER/REPO`; Fleet matches it byte for byte, with no
+    `.git` or SSH normalization. An unmapped URL leaves the Task Pending with
+    `NeedsAttention`/`RepositoryUnmapped`, without spending a spawn attempt, so
+    add the mapping yourself, never a checkout or a directory in its place:
+    1. Find an existing source checkout on the target host whose `origin` is that
+       URL (`git -C PATH remote get-url origin`) and which has no branch named
+       after `runtime.keyPrefix`. If there is none, several, or the mapping needs
+       anything else, ask the user and wait.
+    2. Write a candidate copy of the config that adds
+       `"URL" = "/absolute/source/path"` under `[runtime.repositories]` and
+       changes nothing else. Check it against a new empty scratch directory
+       outside Fleet's data, which opens the runtime the way `fleet up` does
+       without touching the live store:
+       `fleet --config CANDIDATE --data-dir EMPTY_DIR reconcile --max-passes 1 --json`.
+       Only when it exits 0, keep the old config as a backup and put the
+       candidate in its place; then remove the scratch directory. A
+       `fleet list` passing proves nothing: it does not open the runtime.
+    3. A running `fleet up` re-reads `runtime.repositories` before each sweep,
+       so the mapping applies without a restart. A Task dispatched before it
+       waits in Pending with `NeedsAttention`/`RepositoryUnmapped` and spawns
+       within about 30 seconds of the mapping. An invalid edit leaves the last
+       valid mapping in force. Other config settings still need a restart:
+       leave those to the user, and never stop the engine yourself.
+  - `ref` is optional and opaque to Fleet. Thurbox uses it as the base of a
+    worktree created in the mapped source checkout, and it does not fetch, so
+    name a remote-tracking ref such as `origin/main` and have the worker confirm
+    its base against the forge before relying on it.
+  - The first repository is the primary. With one repository the worker starts
+    in its worktree; with several, Thurbox starts it in a directory holding one
+    entry per repository, named after each source checkout's directory. Say in
+    the brief which repository each part of the work belongs to.
+  - The runtime's cleanup applies when the Task is deleted: with Thurbox's
+    default `delete` it removes its worktrees, its branch and any unpushed
+    commits. Brief workers to push, declare or record anything that must
+    survive before they record their result.
+- `{"dir": PATH}` only when the user explicitly asks for that exception, for
+  example for work that has no repository: an existing absolute directory on the
+  target host, outside Fleet's data directory and outside this workspace.
+  Fleet neither creates nor isolates it, so never share one between live Tasks.
+  Put only the Task's inputs and outputs in it; the worker makes any checkout it
+  needs. Without that request, ask the user for a repository or a `dir`
+  exception.
+  Existing `dir` Tasks finish in place; their specs are immutable, so never
+  rewrite or move them.
 
 Write a JSON file using the following shape, replacing every example value.
 Use a JSON serializer for values containing quotes, slashes or newlines.
@@ -46,7 +100,9 @@ Use a JSON serializer for values containing quotes, slashes or newlines.
     "harness": "codex",
     "host": "local",
     "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Record the result through fleet result using the generation of the delivered brief.",
-    "workspace": {"dir": "/absolute/path/to/prepared-workspace"},
+    "workspace": {"repositories": [
+      {"name": "app", "url": "https://forge.example/acme/app", "ref": "origin/main"}
+    ]},
     "dispatch": false
   }
 }
@@ -77,7 +133,7 @@ conclude the Task. Follow feedback through its inbox; a result does not end forg
 following or release the session. Fleet follows only declared changes, never
 marks ready a change opened ready, and relays unmarked posts back as feedback.
 
-## Optional execution defaults (Fleet v2.1.0)
+## Optional execution defaults
 
 Keep the simple Task above unless reusable defaults are useful. TaskConfig and
 EnvProvider are passive JSON resources, applied into the same store, separate
@@ -115,7 +171,9 @@ Apply a provider, then its config, then the Task, for example:
     "configRef": {"name": "reviewer"},
     "env": {"PROJECT_MODE": "focused"},
     "brief": "Review the repository instructions and report findings. Do not publish. Record your result with the delivered brief generation.",
-    "workspace": {"dir": "/absolute/path/to/prepared-workspace"},
+    "workspace": {"repositories": [
+      {"name": "app", "url": "https://forge.example/acme/app", "ref": "origin/main"}
+    ]},
     "dispatch": false
   }
 }

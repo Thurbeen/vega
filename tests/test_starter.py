@@ -161,7 +161,6 @@ class Starter(unittest.TestCase):
             self.assertEqual([r['kind'] for r in examples],
                              ['Task', 'EnvProvider', 'TaskConfig', 'Task'])
             provider, defaults, worker = examples[1:]
-            worker['spec']['workspace']['dir'] = str(workspace)
             resources = install / 'configured.json'
             resources.write_text(json.dumps([provider, defaults, worker]))
             run('apply', '-f', str(resources), '--json', cfg=fake)
@@ -213,6 +212,182 @@ class Starter(unittest.TestCase):
             self.assertEqual(changes[0]['spec']['url'], url)
             self.assertEqual(run('get', 'task', name, cfg=fake)['status']['declared'][-1]['kind'],
                              'ChangeRequest')
+
+
+# A stand-in for thurbox-cli: it records each call, reports a ready local
+# multiplexer and refuses every session create, so Fleet's real thurbox adapter
+# shows the workspace it would ask for without touching a live runtime.
+THURBOX_STUB = '''#!/usr/bin/env python3
+import json, os, sys
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'calls.jsonl'), 'a') as log:
+    log.write(json.dumps(sys.argv[1:]) + '\\n')
+if sys.argv[1:2] == ['doctor']:
+    print(json.dumps({'checks': [{'key': 'multiplexer', 'level': 'ok'}]}))
+elif sys.argv[1:3] == ['session', 'list']:
+    print('[]')
+else:
+    sys.exit(1)
+'''
+
+
+@unittest.skipUnless(os.name == 'posix', 'the thurbox-cli stand-in is a POSIX script')
+class Workspaces(unittest.TestCase):
+    """Repository work reaches the runtime as a runtime-owned workspace."""
+
+    def setUp(self):
+        self.fleet = os.environ.get('FLEET_BIN')
+        self.assertTrue(self.fleet, 'Set FLEET_BIN to the compatible Fleet binary; integration is required')
+        self.tmp = Path(tempfile.mkdtemp(prefix='vega-test-', dir=ROOT))
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.workspace = self.tmp / 'workspace'
+        for asset in tomllib.loads((ROOT / 'starter.toml').read_text())['files']:
+            if asset.startswith('workspace/'):
+                target = self.tmp / asset
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / asset, target)
+
+    def read(self, asset):
+        return ' '.join((self.workspace / asset).read_text().split())
+
+    def intake_tasks(self):
+        text = (self.workspace / '.agents/skills/task-intake/SKILL.md').read_text()
+        resources = [json.loads(block.split('```', 1)[0]) for block in text.split('```json\n')[1:]]
+        return [r for r in resources if r['kind'] == 'Task']
+
+    def spawn(self, task, mapped):
+        """Apply TASK through Fleet's thurbox adapter; return its argv and status."""
+        stub = self.tmp / 'thurbox-cli'
+        stub.write_text(THURBOX_STUB)
+        stub.chmod(0o755)
+        source = self.tmp / 'source checkout'
+        source.mkdir(exist_ok=True)
+        config = self.tmp / 'thurbox.toml'
+        config.write_text('version = 1\n[data]\ndir = "data"\n[runtime]\nkind = "thurbox"\n'
+                          f'cli = {json.dumps(str(stub))}\nkeyPrefix = "vega"\n'
+                          '[runtime.repositories]\n'
+                          + ''.join(f'{json.dumps(url)} = {json.dumps(str(source))}\n' for url in mapped))
+        task = json.loads(json.dumps(task))
+        task['spec']['dispatch'] = True
+        resource = self.tmp / 'task.json'
+        resource.write_text(json.dumps(task))
+
+        def run(*args):
+            result = subprocess.run([self.fleet, '--config', str(config), *args],
+                                    text=True, capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return result.stdout
+
+        run('apply', '-f', str(resource), '--json')
+        run('reconcile', '--max-passes', '3', '--json')
+        status = json.loads(run('get', 'task', task['metadata']['name']))
+        log = self.tmp / 'calls.jsonl'
+        calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        creates = [c for c in calls if c[:2] == ['session', 'create']]
+        return creates, status, source
+
+    def test_the_repository_example_becomes_a_runtime_worktree(self):
+        # VEGA used to hand every worker a directory it prepared itself, so
+        # thurbox never made a worktree. The shipped repository example must
+        # name its repositories and reach thurbox as one worktree create on a
+        # branch the runtime names, from the base the example gives.
+        tasks = self.intake_tasks()
+        self.assertTrue(tasks, 'task-intake ships no Task example')
+        for example in tasks:
+            self.assertIn('repositories', example['spec']['workspace'],
+                          f"Task example {example['metadata']['name']} still prepares a directory")
+        task = tasks[0]
+        workspace = task['spec']['workspace']
+        primary = workspace['repositories'][0]
+        self.assertTrue(primary['ref'].startswith('origin/'),
+                        'thurbox does not fetch: the example base must be a remote-tracking ref')
+        creates, status, source = self.spawn(task, [r['url'] for r in workspace['repositories']])
+        self.assertEqual(len(creates), 1, status['status'].get('conditions'))
+        argv = creates[0]
+        uid = status['metadata']['uid']
+        self.assertEqual(argv[argv.index('--repo-path') + 1], str(source))
+        self.assertEqual(argv[argv.index('--worktree-branch') + 1],
+                         f"vega/{task['metadata']['name']}.{uid}")
+        self.assertEqual(argv[argv.index('--base-branch') + 1], primary['ref'])
+
+    def test_an_unmapped_repository_is_mapped_before_it_spawns(self):
+        # An unmapped URL never reaches thurbox. VEGA maps it itself, to an
+        # existing source checkout, instead of falling back to a directory or
+        # a checkout of its own. The waiting Task must not spend its spawn
+        # attempts meanwhile, or it stalls before the mapping lands.
+        task = self.intake_tasks()[0]
+        creates, status, _ = self.spawn(task, [])
+        self.assertEqual(creates, [])
+        conditions = {c['type']: c for c in status['status']['conditions']}
+        self.assertEqual(conditions['Spawned']['reason'], 'RepositoryUnmapped', conditions)
+        self.assertEqual(conditions['NeedsAttention']['reason'], 'RepositoryUnmapped', conditions)
+        self.assertEqual(status['status'].get('spawnAttempts', 0), 0)
+        self.assertEqual(status['status']['phase'], 'Pending')
+        mapped = json.loads(json.dumps(task))
+        mapped['metadata']['name'] += '-mapped'
+        urls = [r['url'] for r in task['spec']['workspace']['repositories']]
+        creates, status, source = self.spawn(mapped, urls)
+        self.assertEqual(len(creates), 1, status['status'].get('conditions'))
+        self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
+        intake = self.read('.agents/skills/task-intake/SKILL.md')
+        for rule in ['An unmapped URL leaves the Task Pending with `NeedsAttention`/`RepositoryUnmapped`',
+                     'reports `version` 2.2.1 or later',
+                     'add the mapping yourself',
+                     'existing source checkout',
+                     'ask the user and wait',
+                     'without a restart',
+                     'exact URL']:
+            self.assertIn(rule, intake)
+        self.assertNotIn('report it instead of adding a mapping', intake)
+
+    def test_the_documented_mapping_check_refuses_a_bad_mapping(self):
+        # `fleet list` never opens the runtime, so a relative source passed it
+        # and only broke `fleet up` after the restart. The check task-intake
+        # documents must refuse such a mapping before the live config changes,
+        # without touching the live store or the runtime.
+        intake = self.read('.agents/skills/task-intake/SKILL.md')
+        command = intake.split('`fleet --config CANDIDATE', 1)[1].split('`', 1)[0].split()
+        self.assertIn('--data-dir', command)
+        stub = self.tmp / 'thurbox-cli'
+        stub.write_text(THURBOX_STUB)
+        stub.chmod(0o755)
+        live = self.tmp / 'live store'
+        for source, code in [('relative/source', 1), (str(self.tmp), 0)]:
+            candidate = self.tmp / 'candidate.toml'
+            candidate.write_text(f'version = 1\n[data]\ndir = {json.dumps(str(live))}\n'
+                                 f'[runtime]\nkind = "thurbox"\ncli = {json.dumps(str(stub))}\n'
+                                 'keyPrefix = "vega"\n[runtime.repositories]\n'
+                                 f'"https://forge.example/acme/app" = {json.dumps(source)}\n')
+            scratch = Path(tempfile.mkdtemp(dir=self.tmp))
+            argv = [scratch.as_posix() if arg == 'EMPTY_DIR' else arg for arg in command]
+            result = subprocess.run([self.fleet, '--config', str(candidate), *argv],
+                                    text=True, capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+        self.assertFalse(live.exists())
+        self.assertFalse((self.tmp / 'calls.jsonl').exists())
+
+    def test_guidance_leaves_checkouts_to_the_runtime(self):
+        # VEGA's own entry points must not tell it to provision Git; the
+        # prepared-directory form is an exception the user must ask for.
+        intake = self.read('.agents/skills/task-intake/SKILL.md')
+        surfaces = [self.read('AGENTS.md'), self.read('prompts/mission-control.md'), intake]
+        for text in surfaces:
+            for stale in ['A Task does not create a checkout',
+                          'Prepare a separate existing absolute workspace',
+                          'and isolated workspace',
+                          'prepare briefs and isolated workspaces']:
+                self.assertNotIn(stale, text)
+        for rule in ['`runtime.repositories`',
+                     'only when the user explicitly asks for that exception',
+                     'a repository or a `dir` exception',
+                     'Never clone, add a worktree or prepare a checkout',
+                     "outside Fleet's data directory and outside this workspace",
+                     'the worker makes any checkout',
+                     'one entry per repository',
+                     'removes its worktrees, its branch and any unpushed commits',
+                     'Existing `dir` Tasks finish in place']:
+            self.assertIn(rule, intake)
+        status = self.read('.agents/skills/task-status/SKILL.md')
+        self.assertIn('unpushed commits', status)
 
 
 

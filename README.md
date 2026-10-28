@@ -7,13 +7,13 @@ running as an ordinary Task.
 
 VEGA is dispatch-only Mission Control. Every substantive requested deliverable—
 from design and research through implementation, review, writing and operations—
-runs in a bounded worker Task with its own prepared workspace. VEGA itself only
+runs in a bounded worker Task with its own workspace. VEGA itself only
 routes and steers work, including guarded direct prompts to an existing owned
 Task session, resolves dependencies, checks recorded evidence and reports state.
 A routine status check does not need a recursive Task; short or read-only work is
 not an exception to dispatch.
 
-This starter targets Fleet v2.1.0, resource API `fleet/v1alpha1` and native config
+This starter targets Fleet v2.2.1, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
 these are optional and the initial bundle still creates only Task `vega`.
 The `fleet init` / `fleet up` flow requires Fleet's bootstrap implementation;
@@ -83,7 +83,21 @@ The skills are also standard `SKILL.md` packages. From a source checkout,
 `npx skills add . --list` discovers them; install only the skills you need.
 Installing skills alone does not create a Fleet config, workspace or VEGA Task.
 
-## Fleet v2.1.0 capabilities
+## Fleet v2.2.1 capabilities
+
+A Task's `spec.workspace` is `{"repositories": [{"name", "url", "ref"?}]}` or
+`{"dir": PATH}`. task-intake routes every Task to the first form: the
+runtime materializes the repositories for that Task and cleans them up when its
+session is deleted, so VEGA never clones or adds worktrees. With Thurbox, the
+config maps each exact URL to a source checkout in `runtime.repositories`; an
+unmapped URL leaves the Task waiting, so VEGA adds the mapping to an existing
+source checkout, asking the user when it needs more, and a running `fleet up`
+applies it at its next sweep without a restart. `ref` is the worktree base, and
+Thurbox does not
+fetch, so briefs name a remote-tracking ref such as `origin/main`. The default
+`runtime.workspaceCleanup = "delete"` removes the worktrees, the branch and any
+unpushed commits with the session. `{dir}` is an exception the user must ask
+for, in a directory outside Fleet's data and outside VEGA's workspace.
 
 The canonical task-intake skill includes executable JSON examples for optional
 TaskConfig/EnvProvider defaults. Apply those resources to the same store before
@@ -123,14 +137,14 @@ comes from the delivered brief, even after a later forge/dispatch edit.
 
 All commands and child briefs must address the same resolved configuration via
 `--config PATH` or inherited `FLEET_CONFIG`. Do not initialize a second store.
-See Fleet v2.1.0's [resource contracts](https://github.com/Thurbeen/fleet/tree/v2.1.0/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.1.0/docs/configuration)
+See Fleet v2.2.1's [resource contracts](https://github.com/Thurbeen/fleet/tree/v2.2.1/docs/resources)
+and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.2.1/docs/configuration)
 for the full engine contract. This starter adds no engine code or replacement
 controller.
 
 ## Verify source content
 
-Source contributors need Python 3.11 or newer, `uv`, and a Fleet v2.1.0-compatible
+Source contributors need Python 3.11 or newer, `uv`, and a Fleet v2.2.1-compatible
 executable. No Python package dependencies are required. Set `FLEET_BIN`
 to the absolute executable path, then run:
 
@@ -148,8 +162,8 @@ end-to-end run simulates Windows relative-path separators to check manifest
 portability; this does not replace native Windows runtime validation.
 
 The regression also checks that every installed prompt entry point expresses the
-dispatch-only boundary, representative work categories, repository-free isolated
-work, the orchestration/status exception, and the direct-versus-durable delivery
+dispatch-only boundary, representative work categories, repository-free work,
+the orchestration/status exception, and the direct-versus-durable delivery
 contract. These content assertions validate delivered guidance and CLI contracts;
 they cannot empirically prove that a language model will always obey prose or that
 a simulated adapter proves live remote interaction.
@@ -159,6 +173,19 @@ worker rules. It now checks the installed guidance, executes the skill's optiona
 resource examples, verifies environment precedence and frozen defaults, mutates
 forge settings, delivers an inbox message, declares facts and an offline
 ChangeRequest mirror, and records a result with the delivered brief generation.
+
+The v2.2.0 regression first failed because task-intake's example prepared a
+directory, which Fleet hands to Thurbox as `--repo-path` with no worktree. It
+applies the shipped repository example through Fleet's real Thurbox adapter, with
+a recording `thurbox-cli` stand-in that refuses every create, and checks that a
+mapped URL becomes one worktree create on a runtime-named branch from the
+example's base, while an unmapped URL never reaches Thurbox until it is mapped and
+leaves the Task Pending with `RepositoryUnmapped` instead of spending its spawn
+attempts, which v2.2.0 did.
+It also runs task-intake's documented check of a candidate mapping, which must
+refuse a relative source without touching the live store. The stand-in is a
+POSIX script, so that class skips on Windows. It does not prove a live Thurbox
+worktree, its cleanup or its source freshness.
 
 FakeRuntime is test-only. This test does not log in to a harness, start live
 Thurbox sessions, validate Windows startup, or prove the engine's concurrent
@@ -170,6 +197,6 @@ required before publication. See [.publish.yaml](.publish.yaml).
 
 MIT, copyright 2026 Thurbeen. The license is retained from Fleet's public MIT
 license. The forge worker rules are retained from Fleet v2.1.0's bundled VEGA
-workspace. Other workspace guidance is informed by that release's public resource
-and configuration contracts and checked against the installed v2.1.0 CLI. Legacy
+workspace. Other workspace guidance is informed by Fleet v2.2.1's public resource
+and configuration contracts and checked against the v2.2.1 CLI. Legacy
 Python queue skills and operator configuration were not copied.

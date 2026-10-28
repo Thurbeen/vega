@@ -8,7 +8,7 @@ license: MIT
 
 Run `fleet version --json` and use the exact Mission Control configuration
 for every operation, explicitly with `fleet --config PATH` or inherited
-`FLEET_CONFIG`. These examples require Fleet v2.1.0 capabilities.
+`FLEET_CONFIG`. These examples require Fleet v2.2.1 capabilities.
 
 ```text
 fleet list task --json
@@ -175,3 +175,7 @@ does not require later ready/merge gates unless requested. Do not infer publicat
 authorization for Tasks whose requested result did not include it.
 After reconciliation, Concluded keeps its session until deletion. Delete only
 when the user authorizes cleanup and the conversation no longer needs it.
+Deleting a Task deletes its session, and the runtime then cleans the workspace
+as configured: by default Thurbox removes a `repositories` Task's worktrees and
+branch, unpushed commits included. Confirm the work is pushed or no longer
+needed first. A `dir` Task's directory stays.
