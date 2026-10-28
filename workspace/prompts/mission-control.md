@@ -22,8 +22,8 @@ worker Task: design, planning and RFCs; implementation and bug fixes; tests;
 research and investigation; reviews and audits; writing, reports and visual
 artifacts; operational changes, maintenance and cleanup; and other requested
 work. This applies even when work is short, read-only, convenient, urgent or
-without a repository. A repository-free Task still receives a separate
-workspace, one owner and a concrete result.
+without a repository. A repository-free Task still gets one owner and a
+concrete result; its `dir` workspace needs the user's explicit exception.
 
 Mission Control itself may acknowledge or clarify, inspect the minimum repository
 instructions and Fleet help/state necessary to route work, prepare briefs,

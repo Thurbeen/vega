@@ -328,11 +328,37 @@ class Workspaces(unittest.TestCase):
         for rule in ['An unmapped URL fails the spawn',
                      'add the mapping yourself',
                      'existing source checkout',
-                     'ask the user',
-                     'restart',
+                     'ask the user and wait',
+                     'applies only after a restart',
                      'exact URL']:
             self.assertIn(rule, intake)
         self.assertNotIn('report it instead of adding a mapping', intake)
+
+    def test_the_documented_mapping_check_refuses_a_bad_mapping(self):
+        # `fleet list` never opens the runtime, so a relative source passed it
+        # and only broke `fleet up` after the restart. The check task-intake
+        # documents must refuse such a mapping before the live config changes,
+        # without touching the live store or the runtime.
+        intake = self.read('.agents/skills/task-intake/SKILL.md')
+        command = intake.split('`fleet --config CANDIDATE', 1)[1].split('`', 1)[0].split()
+        self.assertIn('--data-dir', command)
+        stub = self.tmp / 'thurbox-cli'
+        stub.write_text(THURBOX_STUB)
+        stub.chmod(0o755)
+        live = self.tmp / 'live store'
+        for source, code in [('relative/source', 1), (str(self.tmp), 0)]:
+            candidate = self.tmp / 'candidate.toml'
+            candidate.write_text(f'version = 1\n[data]\ndir = {json.dumps(str(live))}\n'
+                                 f'[runtime]\nkind = "thurbox"\ncli = {json.dumps(str(stub))}\n'
+                                 'keyPrefix = "vega"\n[runtime.repositories]\n'
+                                 f'"https://forge.example/acme/app" = {json.dumps(source)}\n')
+            scratch = Path(tempfile.mkdtemp(dir=self.tmp))
+            argv = [scratch.as_posix() if arg == 'EMPTY_DIR' else arg for arg in command]
+            result = subprocess.run([self.fleet, '--config', str(candidate), *argv],
+                                    text=True, capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+        self.assertFalse(live.exists())
+        self.assertFalse((self.tmp / 'calls.jsonl').exists())
 
     def test_guidance_leaves_checkouts_to_the_runtime(self):
         # VEGA's own entry points must not tell it to provision Git; the
@@ -347,6 +373,7 @@ class Workspaces(unittest.TestCase):
                 self.assertNotIn(stale, text)
         for rule in ['`runtime.repositories`',
                      'only when the user explicitly asks for that exception',
+                     'a repository or a `dir` exception',
                      'Never clone, add a worktree or prepare a checkout',
                      "outside Fleet's data directory and outside this workspace",
                      'the worker makes any checkout',

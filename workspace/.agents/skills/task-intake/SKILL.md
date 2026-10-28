@@ -11,7 +11,8 @@ worker Task, including design/planning/RFCs, implementation, bug fixing, tests,
 research/investigation, reviews/audits, writing/reports/visual artifacts,
 operational changes, maintenance, cleanup and other work. Shortness, read-only
 scope, convenience or urgency is not an exception. A request without a repository
-still receives an isolated workspace, one owner and a concrete result.
+still gets one owner, a concrete result and an isolated workspace, which is a
+`dir` only when the user explicitly asks for it.
 Acknowledgement, clarification, dispatch itself and routine reporting of recorded
 Task or change-request status do not need recursive Tasks.
 
@@ -48,10 +49,15 @@ Give each Task its own workspace, in exactly one of two forms:
        URL (`git -C PATH remote get-url origin`) and which has no branch named
        after `runtime.keyPrefix`. If there is none, several, or the mapping needs
        anything else, ask the user and wait.
-    2. Copy the config file, add `"URL" = "/absolute/source/path"` under
-       `[runtime.repositories]` and change nothing else. Run
-       `fleet --config PATH list task --json` to confirm it still loads, and
-       restore the copy if it does not.
+    2. Write a candidate copy of the config that adds
+       `"URL" = "/absolute/source/path"` under `[runtime.repositories]` and
+       changes nothing else. Check it against a new empty scratch directory
+       outside Fleet's data, which opens the runtime the way `fleet up` does
+       without touching the live store:
+       `fleet --config CANDIDATE --data-dir EMPTY_DIR reconcile --max-passes 1 --json`.
+       Only when it exits 0, keep the old config as a backup and put the
+       candidate in its place; then remove the scratch directory. A
+       `fleet list` passing proves nothing: it does not open the runtime.
     3. Fleet reads its config when `fleet up` starts, so the mapping applies
        only after a restart. Ask the user to restart the engine; do not stop
        it yourself. Keep the Task at `dispatch: false` until then.
@@ -72,7 +78,8 @@ Give each Task its own workspace, in exactly one of two forms:
   target host, outside Fleet's data directory and outside this workspace.
   Fleet neither creates nor isolates it, so never share one between live Tasks.
   Put only the Task's inputs and outputs in it; the worker makes any checkout it
-  needs. Without that request, ask which repository the work belongs to.
+  needs. Without that request, ask the user for a repository or a `dir`
+  exception.
   Existing `dir` Tasks finish in place; their specs are immutable, so never
   rewrite or move them.
 

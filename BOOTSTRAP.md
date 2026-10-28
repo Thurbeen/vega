@@ -19,7 +19,8 @@ branch or fetch starter content during first-run initialization.
    Fleet v2.2.0 also renders `starter.workspace`, `data.dir` and the shipped
    `[forge.readyPolicies]` tables (`checks`, `checks-and-bots`, `strict`). It
    selects no `draftPolicy` and configures no forge hosts or
-   `runtime.repositories`; the operator maps repository URLs to source checkouts. An operator must
+   `runtime.repositories`; the operator, or VEGA through task-intake, maps
+   repository URLs to existing source checkouts. An operator must
    configure authenticated hosts before declaring changes; ready policies alone
    do not enable forge access. Preserve existing user-owned config on update.
 4. Parse `tasks/vega.json` as a JSON array and set its sole Task's

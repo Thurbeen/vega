@@ -86,7 +86,7 @@ Installing skills alone does not create a Fleet config, workspace or VEGA Task.
 ## Fleet v2.2.0 capabilities
 
 A Task's `spec.workspace` is `{"repositories": [{"name", "url", "ref"?}]}` or
-`{"dir": PATH}`. task-intake routes repository work to the first form: the
+`{"dir": PATH}`. task-intake routes every Task to the first form: the
 runtime materializes the repositories for that Task and cleans them up when its
 session is deleted, so VEGA never clones or adds worktrees. With Thurbox, the
 config maps each exact URL to a source checkout in `runtime.repositories`; an
@@ -161,8 +161,8 @@ end-to-end run simulates Windows relative-path separators to check manifest
 portability; this does not replace native Windows runtime validation.
 
 The regression also checks that every installed prompt entry point expresses the
-dispatch-only boundary, representative work categories, repository-free isolated
-work, the orchestration/status exception, and the direct-versus-durable delivery
+dispatch-only boundary, representative work categories, repository-free work,
+the orchestration/status exception, and the direct-versus-durable delivery
 contract. These content assertions validate delivered guidance and CLI contracts;
 they cannot empirically prove that a language model will always obey prose or that
 a simulated adapter proves live remote interaction.
@@ -178,7 +178,9 @@ directory, which Fleet hands to Thurbox as `--repo-path` with no worktree. It
 applies the shipped repository example through Fleet's real Thurbox adapter, with
 a recording `thurbox-cli` stand-in that refuses every create, and checks that a
 mapped URL becomes one worktree create on a runtime-named branch from the
-example's base, while an unmapped URL never reaches Thurbox until it is mapped. The stand-in is a
+example's base, while an unmapped URL never reaches Thurbox until it is mapped.
+It also runs task-intake's documented check of a candidate mapping, which must
+refuse a relative source without touching the live store. The stand-in is a
 POSIX script, so that class skips on Windows. It does not prove a live Thurbox
 worktree, its cleanup or its source freshness.
 
