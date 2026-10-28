@@ -262,11 +262,15 @@ class Install:
         path.write_text(json.dumps(resource))
         self.run('apply', '-f', str(path), '--json')
 
-    def delivered_text(self, name):
-        """What the FakeRuntime session for Task NAME actually received."""
+    def session(self, name):
+        """The FakeRuntime host's record of Task NAME's session."""
         key = self.run('get', 'task', name)['status']['session']['key']
         state = json.loads((self.config.parent / 'fake-host/state.json').read_text())
-        return state['sessions'][key]['texts']
+        return state['sessions'][key]
+
+    def delivered_text(self, name):
+        """What the FakeRuntime session for Task NAME actually received."""
+        return self.session(name)['texts']
 
 
 def brief_sections(brief):
@@ -296,14 +300,22 @@ class Briefs(unittest.TestCase):
             brief = intake.split('```markdown\n')[1].split('```\n', 1)[0].strip()
             task = json.loads(intake.split('```json\n')[1].split('```', 1)[0])
             name = task['metadata']['name']
-            # Mission Control serializes the brief and renders its config and workspace.
+            # Repository work names its repositories and the runtime makes the
+            # checkout, so the example applies without a prepared directory.
+            workspace = task['spec']['workspace']
+            self.assertEqual(list(workspace), ['repositories'],
+                             'example repository Task still needs a prepared directory')
+            self.assertFalse('does not create a checkout' in ' '.join(intake.split()),
+                             'task-intake still says a Task never gets a checkout')
+            # Mission Control serializes the brief and renders its config.
             task['spec']['brief'] = brief.replace(EXAMPLE_CONFIG, str(install.config))
-            task['spec']['workspace']['dir'] = str(install.workspace)
             self.assertFalse(task['spec']['dispatch'])
             install.apply(task)
             task['spec']['dispatch'] = True
             install.apply(task)
             install.run('reconcile', '--json')
+            # The runtime received the repositories to materialize, unchanged.
+            self.assertEqual(install.session(name)['workspace'], workspace)
             [delivered] = install.delivered_text(name)
             self.assertEqual(delivered, task['spec']['brief'])
             sections = brief_sections(delivered)
@@ -388,6 +400,69 @@ class Identity(unittest.TestCase):
                        for asset, text in shipped.items()}
             self.assertEqual({a: m for a, m in generic.items() if m}, {},
                              f'shipped guidance calls {HUMAN_NAME} "the user"')
+
+
+ISSUE_SKILL = 'workspace/.agents/skills/issue-intake/SKILL.md'
+ISSUE_URL = re.compile(r'https://\S+?/issues/\d+')
+
+
+def frontmatter(skill):
+    """The `key: value` header of a SKILL.md package."""
+    header = skill.split('---\n')[1]
+    return dict(line.split(': ', 1) for line in header.strip().splitlines())
+
+
+class Issues(unittest.TestCase):
+    """Acceptance scenarios for routing a forge issue to one worker Task."""
+
+    def test_issue_skill_installs_and_vega_can_find_every_skill(self):
+        with tempfile.TemporaryDirectory(prefix='vega-test-', dir=ROOT) as tmp:
+            install = Install(self, tmp)
+            self.assertTrue((install.root / ISSUE_SKILL).is_file(),
+                            'a clean installation has no issue skill')
+            instructions = install.read('workspace/AGENTS.md')
+            readme = (ROOT / 'README.md').read_text()
+            skills = sorted((install.workspace / '.agents/skills').glob('*/SKILL.md'))
+            self.assertGreaterEqual(len(skills), 3)
+            for path in skills:
+                meta = frontmatter(path.read_text())
+                self.assertEqual(meta['name'], path.parent.name)
+                self.assertTrue(meta['description'])
+                self.assertEqual(meta['license'], 'MIT')
+                # Always-loaded instructions name each skill VEGA must load,
+                # and the source README documents each shipped file.
+                relative = path.relative_to(install.workspace).as_posix()
+                self.assertIn(relative, instructions, f'AGENTS.md never names {relative}')
+                self.assertTrue(f'workspace/{relative}' in readme, f'README never documents {relative}')
+            self.assertIn('issue', frontmatter(install.read(ISSUE_SKILL))['description'].lower())
+
+    def test_an_issue_task_names_its_repository_and_is_found_by_its_issue(self):
+        # Before briefing an issue, VEGA looks for a Task that already owns it.
+        # That lookup only works if an issue brief carries the issue URL, and
+        # the Task must check out the repository that issue belongs to.
+        with tempfile.TemporaryDirectory(prefix='vega-test-', dir=ROOT) as tmp:
+            install = Install(self, tmp)
+            self.assertTrue((install.root / ISSUE_SKILL).is_file(),
+                            'a clean installation has no issue skill')
+            skill = ' '.join(install.read(ISSUE_SKILL).split())
+            # The skill routes through the shared intake and status skills
+            # instead of keeping its own copy of their rules or examples.
+            for shared in ['task-intake', 'task-status']:
+                self.assertIn(shared, skill)
+            self.assertNotIn('```json', skill)
+            self.assertIn('fleet list task --json', skill)
+            intake = install.read('workspace/.agents/skills/task-intake/SKILL.md')
+            brief = intake.split('```markdown\n')[1].split('```\n', 1)[0]
+            task = json.loads(intake.split('```json\n')[1].split('```', 1)[0])
+            task['spec']['brief'] = brief
+            install.apply(task)
+            install.run('reconcile', '--json')
+            [issue] = set(ISSUE_URL.findall(brief))
+            [repository] = task['spec']['workspace']['repositories']
+            self.assertEqual(issue.rsplit('/issues/', 1)[0], repository['url'])
+            owners = [t['metadata']['name'] for t in install.run('list', 'task', '--json')
+                      if issue in t['spec']['brief']]
+            self.assertEqual(owners, [task['metadata']['name']])
 
 
 

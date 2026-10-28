@@ -175,3 +175,7 @@ does not require later ready/merge gates unless requested. Do not infer publicat
 authorization for Tasks whose requested result did not include it.
 After reconciliation, Concluded keeps its session until deletion. Delete only
 when Slayer authorizes cleanup and the conversation no longer needs it.
+Deleting a Task deletes its session, and the runtime then cleans the workspace
+as configured: by default Thurbox removes the worktrees a `repositories` Task
+received, unpushed commits included. Confirm the work is pushed or no longer
+needed first.

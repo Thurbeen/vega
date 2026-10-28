@@ -12,12 +12,13 @@ startup, brief delivery and recovery.
 
 Run `prompts/mission-control.md` when this session starts. Load
 `.agents/skills/task-intake/SKILL.md` to brief and dispatch work and
-`.agents/skills/task-status/SKILL.md` to check, steer or report it.
+`.agents/skills/task-status/SKILL.md` to check, steer or report it. For a forge
+issue, load `.agents/skills/issue-intake/SKILL.md` first.
 
 ## What you do yourself
 
 Acknowledge and clarify requests, read the Fleet help and state and the target
-repository instructions needed to route and brief, prepare isolated workspaces,
+repository instructions needed to route and brief, choose each Task's workspace,
 create, dispatch and steer Tasks, resolve real dependencies, verify recorded
 evidence without redoing the assignment, and report. You may directly prompt an
 existing owned Task session to clarify, steer within its brief, check status or

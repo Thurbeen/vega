@@ -1,13 +1,13 @@
 # VEGA
 
 VEGA is the generic Mission Control workspace bundled with Fleet v2's
-engine. It contains instructions, prompts, two agent skills, a minimal runtime
+engine. It contains instructions, prompts, three agent skills, a minimal runtime
 configuration and one initial Task. Fleet is the engine; VEGA is editable content
 running as an ordinary Task.
 
 VEGA is dispatch-only Mission Control. Every substantive requested deliverable—
 from design and research through implementation, review, writing and operations—
-runs in a bounded worker Task with its own prepared workspace. VEGA itself only
+runs in a bounded worker Task with its own workspace. VEGA itself only
 routes and steers work, including guarded direct prompts to an existing owned
 Task session, resolves dependencies, checks recorded evidence and reports state.
 A routine status check does not need a recursive Task; short or read-only work is
@@ -66,6 +66,7 @@ this checkout, its Git directory, tests, local configuration or arbitrary files.
 | `workspace/prompts/mission-control.md` | Startup and coordination prompt |
 | `workspace/.agents/skills/task-intake/SKILL.md` | Write a worker brief, then create and dispatch its Task |
 | `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
+| `workspace/.agents/skills/issue-intake/SKILL.md` | Route a forge issue to one worker Task through task-intake |
 | `config/fleet.toml` | Working Thurbox runtime configuration |
 | `tasks/vega.json` | JSON array containing the initial VEGA Task template |
 | `LICENSE` | MIT license and retained attribution |
@@ -137,11 +138,34 @@ and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.1.0/docs
 for the full engine contract. This starter adds no engine code or replacement
 controller.
 
+## Workspaces and issues
+
+A Task's workspace is either a prepared `{dir}` or `{repositories}`, which the
+runtime checks out for that Task alone and cleans up when its session is
+deleted ([Thurbeen/fleet#329](https://github.com/Thurbeen/fleet/pull/329)).
+VEGA's own Task keeps its installed `{dir}`; the task-intake example uses
+`{repositories}`. With Thurbox, the operator maps each repository URL to a
+source checkout in `runtime.repositories`, and `runtime.workspaceCleanup`
+chooses whether deleting a session removes its worktrees (`delete`, the
+default) or keeps them restorable (`keep`). The minimal template sets neither.
+A Fleet build without #329 refuses `repositories` as an unknown field, yet
+reports the same version 2.1.0, so check support by applying a Task, not by
+version.
+
+The issue-intake skill routes a forge issue. VEGA resolves the repository and
+issue from the forge, looks for a Task or open change that already owns it, and
+briefs one worker through task-intake: a `{repositories}` workspace, a failing
+end-to-end reproducer before any fix, the repository's own gates, and a draft
+change only when Slayer authorized one. VEGA never fixes, closes or merges the
+issue itself.
+
 ## Verify source content
 
-Source contributors need Python 3.11 or newer, `uv`, and a Fleet v2.1.0-compatible
-executable. No Python package dependencies are required. Set `FLEET_BIN`
-to the absolute executable path, then run:
+Source contributors need Python 3.11 or newer, `uv`, and a Fleet executable
+built from Thurbeen/fleet#329 or later (`main` at `2431795`). No release
+contains it yet, and the released v2.1.0 binary fails the suite with
+``unknown field `repositories` ``. No Python package dependencies are required.
+Set `FLEET_BIN` to the absolute executable path, then run:
 
 ```text
 uv run --no-project python -m unittest discover -s tests -v
@@ -184,6 +208,17 @@ worker rules. It now checks the installed guidance, executes the skill's optiona
 resource examples, verifies environment precedence and frozen defaults, mutates
 forge settings, delivers an inbox message, declares facts and an offline
 ChangeRequest mirror, and records a result with the delivered brief generation.
+
+Two issue scenarios cover runtime-owned workspaces and the issue skill. The
+task-intake example Task names its repository instead of a prepared directory,
+applies unchanged and reaches FakeRuntime with that workspace. A clean
+installation contains issue-intake, every installed skill has a matching
+frontmatter name and is named in `AGENTS.md` and this README, and a Task briefed
+from the example is found again by its issue URL, as issue-intake looks for an
+existing owner. These first failed on the 0.6.0 content, whose example Task used
+a prepared `{dir}` and which shipped no issue skill. They check the routing and
+packaging contract, not whether a model reads an issue correctly, picks the
+right repository or refuses to fix it inline.
 
 FakeRuntime is test-only. This test does not log in to a harness, start live
 Thurbox sessions, validate Windows startup, or prove the engine's concurrent

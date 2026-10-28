@@ -18,9 +18,9 @@ branch or fetch starter content during first-run initialization.
    `fleet`. Independent installations must not claim one another's sessions.
    Fleet v2.1.0 also renders `starter.workspace`, `data.dir` and the shipped
    `[forge.readyPolicies]` tables (`checks`, `checks-and-bots`, `strict`). It
-   selects no `draftPolicy` and configures no forge hosts. An operator must
-   configure authenticated hosts before declaring changes; ready policies alone
-   do not enable forge access. Preserve existing user-owned config on update.
+   selects no `draftPolicy` and configures no forge hosts or
+   `runtime.repositories`. An operator must configure authenticated hosts before
+   declaring changes; ready policies alone do not enable forge access. Preserve existing user-owned config on update.
 4. Parse `tasks/vega.json` as a JSON array and set its sole Task's
    `spec.workspace.dir` to the absolute installed workspace path. The template's
    `{{workspace}}` is a whole string placeholder, not a shell expression.

@@ -8,7 +8,7 @@ review:
 gate:
   - name: starter
     run: uv run --no-project python -m unittest discover -s tests -v
-    instructions: Set FLEET_BIN to an absolute path of a Fleet v2.1.0-compatible executable. The test must use the real binary and FakeRuntime, never a live harness session.
+    instructions: Set FLEET_BIN to an absolute path of a Fleet executable built from Thurbeen/fleet#329 or later; the released v2.1.0 binary refuses the repositories workspace. The test must use the real binary and FakeRuntime, never a live harness session.
   - name: hooks
     run: prek run --all-files
 ci:

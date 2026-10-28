@@ -16,12 +16,23 @@ default store, and every brief repeats that path.
 
 Name the concrete result, the repository and base if any, the checks that prove
 it and exactly what Slayer authorized. Give each Task one result and one
-owner. Prepare a separate existing absolute workspace on the target host: a Task
-does not create a checkout or isolate files. Work without a repository still
-gets an isolated directory holding only its inputs and outputs. Read only the
-target repository instructions needed to pick the harness and the checks, and
-verify that harness is installed and authenticated. Choose a unique lowercase
-DNS-like Task name.
+owner. Read only the target repository instructions needed to pick the harness
+and the checks, and verify that harness is installed and authenticated. Choose
+a unique lowercase DNS-like Task name.
+
+Give each Task its own workspace, in exactly one of two forms:
+
+- `{"repositories": [{"name", "url", "ref"}]}` for repository work. The runtime
+  checks the repositories out for this Task alone, on a branch it chooses, and
+  the worker starts in the first one. `ref` is optional and the runtime decides
+  what it means; for Thurbox it is the base branch. The operator maps each URL
+  to a source checkout in `runtime.repositories`; an unmapped URL fails the
+  spawn. A Fleet build that refuses `repositories` as an unknown field predates
+  this form: use a prepared `{dir}` instead.
+- `{"dir": PATH}`: an existing absolute directory on the target host that you
+  prepare. Fleet neither creates nor isolates it, so never share one between
+  live Tasks. Work without a repository still gets an isolated directory holding
+  only its inputs and outputs.
 
 ## 2. Write the brief
 
@@ -31,7 +42,7 @@ once. Write it from scratch under these five headings, in order:
 | Heading | Contents |
 | --- | --- |
 | `## Request` | Slayer's words, quoted verbatim, so the worker can check your reading against the source. |
-| `## Goal` | The outcome, plus each task-specific fact the worker cannot read from the repository: repository, base or commit, prepared workspace, state seen at routing marked as a snapshot to confirm. |
+| `## Goal` | The outcome, plus each task-specific fact the worker cannot read from the repository: repository, base or commit, workspace, issue URL, state seen at routing marked as a snapshot to confirm. |
 | `## Constraints` | What it must not do, each with the failure it prevents, and the authorization limit. |
 | `## Coordination` | Other Tasks it could collide with or wait on, and what to do about each; `None.` when there are none. |
 | `## Done means` | The artifact and checks that end the Task, then the exact Fleet commands to record its result. |
@@ -54,10 +65,10 @@ Example brief for an authorized draft pull request:
 
 ```markdown
 ## Request
-"Logins from the mobile app land on the home page instead of where they started. Fix it and open a draft PR."
+"Fix https://forge.example/acme/app/issues/42 and open a draft PR."
 
 ## Goal
-Make a mobile login return to the page it started from. The prepared worktree is /absolute/path/to/prepared-workspace, branch fix-login-redirect from the repository's main branch. At routing, the issue says the `next` parameter is lost on the mobile sign-in route; confirm current behavior before relying on it.
+Make a mobile login return to the page it started from, as https://forge.example/acme/app/issues/42 asks. The runtime checks out https://forge.example/acme/app from main for this Task, on its own branch. At routing, the issue says the `next` parameter is lost on the mobile sign-in route; confirm current behavior before relying on it.
 
 ## Constraints
 - Write a failing end-to-end reproducer before changing code, so the fix is shown to cover the reported route.
@@ -82,7 +93,9 @@ Serialize the brief into the Task with a JSON serializer, never by hand:
     "harness": "codex",
     "host": "local",
     "brief": "<the brief above>",
-    "workspace": {"dir": "/absolute/path/to/prepared-workspace"},
+    "workspace": {"repositories": [
+      {"name": "app", "url": "https://forge.example/acme/app", "ref": "main"}
+    ]},
     "dispatch": false
   }
 }
