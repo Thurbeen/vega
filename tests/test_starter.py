@@ -79,6 +79,42 @@ class Starter(unittest.TestCase):
             for content in [intake, task_status]:
                 self.assertIn('required by the user or repository', content.lower())
                 self.assertIn('draft-only', content.lower())
+            # A clean install must let Mission Control coordinate an existing
+            # Task session without weakening the dispatch-only boundary. These
+            # are documentation contract checks; FakeRuntime does not simulate
+            # a live terminal or prove that an agent will obey the guidance.
+            for entry_point in [instructions, mission_control]:
+                self.assertIn('existing owned task session', entry_point.lower())
+                self.assertIn('direct prompts do not authorize substantive work',
+                              ' '.join(entry_point.split()).lower())
+                self.assertIn('task-status', entry_point.lower())
+            self.assertIn('guarded task-status workflow', instructions.lower())
+            self.assertIn('during a working turn', mission_control.lower())
+            self.assertIn('do not use terminal access', mission_control.lower())
+            for contract in [
+                'status.session',
+                'runtime.cli',
+                'session capture --lines 0 --json',
+                'session send UUID TEXT --json --strict',
+                'fleet send TASK TEXT',
+                'delivered_via',
+                'submitted',
+                'queued',
+                'working turn',
+                'FakeRuntime',
+            ]:
+                self.assertIn(contract.lower(), task_status.lower())
+            normalized_status = ' '.join(task_status.split()).lower()
+            for safety_rule in [
+                'Do not default to `--force`',
+                'not approve a trust or permission prompt',
+                'do not direct-send and durable-send the same instruction',
+                'capture again after `--no-enter`',
+                'same composer',
+            ]:
+                self.assertIn(safety_rule.lower(), normalized_status)
+            self.assertIn('new substantive request', task_status.lower())
+            self.assertIn('new task', task_status.lower())
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())

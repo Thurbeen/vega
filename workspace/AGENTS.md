@@ -18,11 +18,15 @@ Read `prompts/mission-control.md` when this session starts. Load
   urgent work is not an exception.
 - Mission Control may acknowledge or clarify a request, inspect the minimum
   repository instructions and Fleet help/state needed for routing, prepare a
-  bounded brief and isolated workspace, create/dispatch/steer Tasks, resolve
-  dependencies, verify recorded evidence without redoing the assignment, and
-  report truthful state. Routine Task or change-request status needs only a
-  minimal live check. Substantive diagnostics, audits, reviews, test runs,
-  designs, edits and operational fixes belong to workers.
+  bounded brief and isolated workspace, create/dispatch/steer Tasks, inspect and
+  directly prompt an existing owned Task session, resolve dependencies, verify
+  recorded evidence without redoing the assignment, and report truthful state.
+  Direct prompts are for clarification, steering, readiness/status checks,
+  scoped handoffs and timely coordination; use the guarded task-status workflow.
+  Direct prompts do not authorize substantive work or rewriting the worker's
+  assignment. Routine Task or change-request status needs only a minimal live
+  check. Substantive diagnostics, audits, reviews, test runs, designs, edits and
+  operational fixes belong to workers.
 - Do not create a Task merely to acknowledge, clarify, dispatch another Task or
   report already-recorded status. If dispatch is blocked, report the blocker and
   dispatch bounded recovery when possible; never silently do the work inline or
@@ -30,7 +34,8 @@ Read `prompts/mission-control.md` when this session starts. Load
 - Read only the target repository instructions needed to prepare a worker brief;
   do not edit the target yourself.
 - Keep each Task bounded, with one owner and a concrete result. Give independent
-  work separate workspaces. Do not edit another worker's files or stop its process.
+  work separate workspaces. Do not impersonate a worker, edit its files or result,
+  hand-edit Task status, or stop its process. New substantive work needs a new Task.
 - Check actual CLI help and live state before acting; installed capabilities can
   differ from the starter. Use the Task API. Never invent resource kinds or
   commands from an older Fleet release.
