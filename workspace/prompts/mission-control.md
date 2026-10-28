@@ -41,8 +41,9 @@ recursive Task merely to dispatch another Task, acknowledge, clarify or report
 status, and do not use terminal access to perform or alter a worker's assignment.
 
 Identify the repository if any, workspace, checks, concrete result and exact
-authorization. Repository work names its repositories and the runtime makes the
-checkout, as task-intake describes. Preserve the user's serial order, permitted parallel lanes,
+authorization. Every Task names its repositories and the runtime makes the
+checkout; map an unmapped repository first, and use a `dir` workspace only when
+the user explicitly asks for that exception, as task-intake describes. Preserve the user's serial order, permitted parallel lanes,
 skipped work and publication/merge/deploy limits across later messages. Give
 independent work separate workspaces and do not duplicate it when a session
 observation is ambiguous. Resolve actual dependencies before dispatching; Fleet

@@ -89,12 +89,14 @@ A Task's `spec.workspace` is `{"repositories": [{"name", "url", "ref"?}]}` or
 `{"dir": PATH}`. task-intake routes repository work to the first form: the
 runtime materializes the repositories for that Task and cleans them up when its
 session is deleted, so VEGA never clones or adds worktrees. With Thurbox, the
-operator maps each exact URL to a source checkout in `runtime.repositories`; an
-unmapped URL fails the spawn. `ref` is the worktree base, and Thurbox does not
+config maps each exact URL to a source checkout in `runtime.repositories`; an
+unmapped URL fails the spawn, so VEGA adds the mapping to an existing source
+checkout, asking the user when it needs more, and the mapping applies after
+`fleet up` restarts. `ref` is the worktree base, and Thurbox does not
 fetch, so briefs name a remote-tracking ref such as `origin/main`. The default
 `runtime.workspaceCleanup = "delete"` removes the worktrees, the branch and any
-unpushed commits with the session. `{dir}` remains for work without a mapped
-repository, in a directory outside Fleet's data and outside VEGA's workspace.
+unpushed commits with the session. `{dir}` is an exception the user must ask
+for, in a directory outside Fleet's data and outside VEGA's workspace.
 
 The canonical task-intake skill includes executable JSON examples for optional
 TaskConfig/EnvProvider defaults. Apply those resources to the same store before
@@ -176,7 +178,7 @@ directory, which Fleet hands to Thurbox as `--repo-path` with no worktree. It
 applies the shipped repository example through Fleet's real Thurbox adapter, with
 a recording `thurbox-cli` stand-in that refuses every create, and checks that a
 mapped URL becomes one worktree create on a runtime-named branch from the
-example's base while an unmapped URL never reaches Thurbox. The stand-in is a
+example's base, while an unmapped URL never reaches Thurbox until it is mapped. The stand-in is a
 POSIX script, so that class skips on Windows. It does not prove a live Thurbox
 worktree, its cleanup or its source freshness.
 

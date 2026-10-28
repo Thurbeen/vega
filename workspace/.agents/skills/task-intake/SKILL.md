@@ -33,17 +33,28 @@ a unique lowercase DNS-like Task name.
 
 Give each Task its own workspace, in exactly one of two forms:
 
-- `{"repositories": [{"name", "url", "ref"}]}` for repository work. The runtime
+- `{"repositories": [{"name", "url", "ref"}]}` for every Task. The runtime
   owns the checkout: it materializes the repositories for this Task alone, on a
   branch it names, and cleans them up when the Task's session is deleted. Never
   clone, add a worktree or prepare a checkout yourself, and never name a branch
   in the spec; Fleet has no branch, base, worktree or cleanup field.
-  - Use the exact URL the operator mapped in the Mission Control config's
+  - Use the exact URL mapped in the Mission Control config's
     `runtime.repositories`, for example the canonical
     `https://github.com/OWNER/REPO`; Fleet matches it byte for byte, with no
     `.git` or SSH normalization. An unmapped URL fails the spawn (`SpawnRetry`,
-    naming `runtime.repositories`): report it instead of adding a mapping or
-    falling back to a checkout of your own.
+    naming `runtime.repositories`), so add the mapping yourself before
+    dispatching, never a checkout or a directory in its place:
+    1. Find an existing source checkout on the target host whose `origin` is that
+       URL (`git -C PATH remote get-url origin`) and which has no branch named
+       after `runtime.keyPrefix`. If there is none, several, or the mapping needs
+       anything else, ask the user and wait.
+    2. Copy the config file, add `"URL" = "/absolute/source/path"` under
+       `[runtime.repositories]` and change nothing else. Run
+       `fleet --config PATH list task --json` to confirm it still loads, and
+       restore the copy if it does not.
+    3. Fleet reads its config when `fleet up` starts, so the mapping applies
+       only after a restart. Ask the user to restart the engine; do not stop
+       it yourself. Keep the Task at `dispatch: false` until then.
   - `ref` is optional and opaque to Fleet. Thurbox uses it as the base of a
     worktree created in the mapped source checkout, and it does not fetch, so
     name a remote-tracking ref such as `origin/main` and have the worker confirm
@@ -56,12 +67,14 @@ Give each Task its own workspace, in exactly one of two forms:
     default `delete` it removes its worktrees, its branch and any unpushed
     commits. Brief workers to push, declare or record anything that must
     survive before they record their result.
-- `{"dir": PATH}` only for work without a mapped repository: an existing
-  absolute directory on the target host, outside Fleet's data directory and
-  outside this workspace. Fleet neither creates nor isolates it, so never share
-  one between live Tasks. Put only the Task's inputs and outputs in it; the
-  worker makes any checkout it needs. Existing `dir` Tasks finish in place;
-  their specs are immutable, so never rewrite or move them.
+- `{"dir": PATH}` only when the user explicitly asks for that exception, for
+  example for work that has no repository: an existing absolute directory on the
+  target host, outside Fleet's data directory and outside this workspace.
+  Fleet neither creates nor isolates it, so never share one between live Tasks.
+  Put only the Task's inputs and outputs in it; the worker makes any checkout it
+  needs. Without that request, ask which repository the work belongs to.
+  Existing `dir` Tasks finish in place; their specs are immutable, so never
+  rewrite or move them.
 
 Write a JSON file using the following shape, replacing every example value.
 Use a JSON serializer for values containing quotes, slashes or newlines.

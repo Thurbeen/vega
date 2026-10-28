@@ -309,23 +309,34 @@ class Workspaces(unittest.TestCase):
                          f"vega/{task['metadata']['name']}.{uid}")
         self.assertEqual(argv[argv.index('--base-branch') + 1], primary['ref'])
 
-    def test_an_unmapped_repository_is_refused_not_provisioned(self):
-        # An unmapped URL never reaches thurbox. VEGA must report it instead of
-        # cloning, adding a worktree or editing the operator's config.
+    def test_an_unmapped_repository_is_mapped_before_it_spawns(self):
+        # An unmapped URL never reaches thurbox. VEGA maps it itself, to an
+        # existing source checkout, instead of falling back to a directory or
+        # a checkout of its own; Fleet reads the mapping when it next starts.
         task = self.intake_tasks()[0]
         creates, status, _ = self.spawn(task, [])
         self.assertEqual(creates, [])
         spawned = [c.get('message', '') for c in status['status']['conditions'] if c['type'] == 'Spawned']
         self.assertIn('runtime.repositories', ' '.join(spawned), status['status']['conditions'])
+        mapped = json.loads(json.dumps(task))
+        mapped['metadata']['name'] += '-mapped'
+        urls = [r['url'] for r in task['spec']['workspace']['repositories']]
+        creates, status, source = self.spawn(mapped, urls)
+        self.assertEqual(len(creates), 1, status['status'].get('conditions'))
+        self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         for rule in ['An unmapped URL fails the spawn',
-                     'report it instead of adding a mapping',
+                     'add the mapping yourself',
+                     'existing source checkout',
+                     'ask the user',
+                     'restart',
                      'exact URL']:
             self.assertIn(rule, intake)
+        self.assertNotIn('report it instead of adding a mapping', intake)
 
     def test_guidance_leaves_checkouts_to_the_runtime(self):
         # VEGA's own entry points must not tell it to provision Git; the
-        # prepared-directory form is only for work without a mapped repository.
+        # prepared-directory form is an exception the user must ask for.
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         surfaces = [self.read('AGENTS.md'), self.read('prompts/mission-control.md'), intake]
         for text in surfaces:
@@ -335,6 +346,7 @@ class Workspaces(unittest.TestCase):
                           'prepare briefs and isolated workspaces']:
                 self.assertNotIn(stale, text)
         for rule in ['`runtime.repositories`',
+                     'only when the user explicitly asks for that exception',
                      'Never clone, add a worktree or prepare a checkout',
                      "outside Fleet's data directory and outside this workspace",
                      'the worker makes any checkout',
