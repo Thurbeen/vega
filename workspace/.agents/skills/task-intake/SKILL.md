@@ -1,6 +1,6 @@
 ---
 name: task-intake
-description: Brief and dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Brief and dispatch every substantive requested deliverable as a bounded Task in Fleet v2.1.0. Load whenever Slayer requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
@@ -15,7 +15,7 @@ default store, and every brief repeats that path.
 ## 1. Shape the work
 
 Name the concrete result, the repository and base if any, the checks that prove
-it and exactly what the user authorized. Give each Task one result and one
+it and exactly what Slayer authorized. Give each Task one result and one
 owner. Prepare a separate existing absolute workspace on the target host: a Task
 does not create a checkout or isolate files. Work without a repository still
 gets an isolated directory holding only its inputs and outputs. Read only the
@@ -30,7 +30,7 @@ once. Write it from scratch under these five headings, in order:
 
 | Heading | Contents |
 | --- | --- |
-| `## Request` | The user's words, quoted verbatim, so the worker can check your reading against the source. |
+| `## Request` | Slayer's words, quoted verbatim, so the worker can check your reading against the source. |
 | `## Goal` | The outcome, plus each task-specific fact the worker cannot read from the repository: repository, base or commit, prepared workspace, state seen at routing marked as a snapshot to confirm. |
 | `## Constraints` | What it must not do, each with the failure it prevents, and the authorization limit. |
 | `## Coordination` | Other Tasks it could collide with or wait on, and what to do about each; `None.` when there are none. |
@@ -40,7 +40,7 @@ once. Write it from scratch under these five headings, in order:
   past failure behind a constraint. Cut persuasion and background the worker
   cannot act on.
 - Do not retype standing policy the worker already reads: the target
-  repository's instructions and gate, or the user's global agent rules. Tell it
+  repository's instructions and gate, or Slayer's global agent rules. Tell it
   which files to read; a retyped copy drifts.
 - Coordination holds only what the worker can act on. Your queue, other users'
   work and the order of later Tasks stay with you.
@@ -99,7 +99,7 @@ back as feedback. Name the repository's publishing skill, or the installed
 publish skill if it has none. Workers do not merge.
 
 A pull or merge request deliverable is done only with a real declared URL on the
-requested base and the checks, CI and review required by the user or repository
+requested base and the checks, CI and review required by Slayer or the repository
 for that delivery stage; a local commit or blocked gate is not completion. A
 draft-only deliverable may conclude after its declared URL and draft-stage gates
 while Fleet keeps following the change. Declaration needs a delivered brief and a

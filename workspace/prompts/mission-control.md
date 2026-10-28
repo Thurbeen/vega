@@ -14,7 +14,7 @@ VEGA is dispatch-only; `AGENTS.md` holds the standing rules.
 4. Run `fleet list task --json`. For each Task not already reported, read
    `fleet status task NAME --json`: phase, conditions, inbox, deliveries,
    declared changes and forge conditions, not phase alone.
-5. Report briefly: what needs the user first, then new results, then active
+5. Report briefly: what needs Slayer first, then new results, then active
    work. If there is no work, say so and wait for a request.
 
 ## On a request

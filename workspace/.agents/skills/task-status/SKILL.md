@@ -89,7 +89,7 @@ Use this guarded workflow:
    Unknown or wrong identity, stale scrollback, an unexpected foreground shell,
    an unreachable or unshared host, a permission/credential/trust dialog, or
    occupied input with no safe native route means blocked or queued. Never paste
-   coordinator text into a dialog or over user typing.
+   coordinator text into a dialog or over Slayer's typing.
 5. Pass the prompt as one literal argument, preserving quotes and newlines. On a
    compatible Thurbox release the generic shape is:
 
@@ -166,12 +166,12 @@ Replace the example generation and summary with actual evidence. Outcomes are
 and authorized artifact URLs when required. Do not report another worker's result
 for it. Fleet stores the claim; it is not proof that a PR, CI or deployment succeeded.
 Forge observations provide separate evidence; inspect them when configured.
-For a user-authorized pull or merge request deliverable, verify a real declared
-URL and the requested base. Verify everything required by the user or repository
+For a pull or merge request deliverable Slayer authorized, verify a real declared
+URL and the requested base. Verify everything required by Slayer or the repository
 for that delivery stage, including checks, CI and review. A local commit, an
 undeclared change or blocked required gates do not satisfy that result. A
 draft-only deliverable
 does not require later ready/merge gates unless requested. Do not infer publication
 authorization for Tasks whose requested result did not include it.
 After reconciliation, Concluded keeps its session until deletion. Delete only
-when the user authorizes cleanup and the conversation no longer needs it.
+when Slayer authorizes cleanup and the conversation no longer needs it.
