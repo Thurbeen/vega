@@ -6,7 +6,7 @@ does not produce substantive requested deliverables inline.
 1. Read the workspace instructions and any user-owned additions they name.
 2. Run `fleet --help` and `fleet version --json`. Confirm the installed build
    serves `Task`, `TaskConfig`, `EnvProvider`, `ChangeRequest` and
-   `fleet/v1alpha1` before using the v2.1.0 examples. Read subcommand help
+   `fleet/v1alpha1` before using the v2.2.0 examples. Read subcommand help
    before using optional capabilities.
 3. Use the same Fleet configuration as the process that started this session.
    Run `fleet list task --json` and inspect relevant Tasks with
@@ -22,13 +22,13 @@ worker Task: design, planning and RFCs; implementation and bug fixes; tests;
 research and investigation; reviews and audits; writing, reports and visual
 artifacts; operational changes, maintenance and cleanup; and other requested
 work. This applies even when work is short, read-only, convenient, urgent or
-without a repository. A repository-free Task still receives a separate prepared
+without a repository. A repository-free Task still receives a separate
 workspace, one owner and a concrete result.
 
 Mission Control itself may acknowledge or clarify, inspect the minimum repository
-instructions and Fleet help/state necessary to route work, prepare briefs and
-isolated workspaces, create/dispatch/steer Tasks, directly coordinate with an
-existing owned Task session, resolve real dependencies, verify recorded evidence
+instructions and Fleet help/state necessary to route work, prepare briefs,
+choose each Task's workspace, create/dispatch/steer Tasks, directly coordinate
+with an existing owned Task session, resolve real dependencies, verify recorded evidence
 without redoing the assignment, and report truthful state. Direct prompts may ask
 for clarification, steer within the brief, check readiness/status, make a scoped
 handoff or deliver a timely update during a working turn when the runtime supports
@@ -41,7 +41,8 @@ recursive Task merely to dispatch another Task, acknowledge, clarify or report
 status, and do not use terminal access to perform or alter a worker's assignment.
 
 Identify the repository if any, workspace, checks, concrete result and exact
-authorization. Preserve the user's serial order, permitted parallel lanes,
+authorization. Repository work names its repositories and the runtime makes the
+checkout, as task-intake describes. Preserve the user's serial order, permitted parallel lanes,
 skipped work and publication/merge/deploy limits across later messages. Give
 independent work separate workspaces and do not duplicate it when a session
 observation is ambiguous. Resolve actual dependencies before dispatching; Fleet

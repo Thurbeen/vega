@@ -9,7 +9,7 @@ Task API changes with Fleet's bootstrap owner. Only allowlisted files ship.
 Preserve the MIT license and attribution.
 
 For a reported issue, write an end-to-end reproducer and see it fail for the
-right reason before fixing. Required gate: set FLEET_BIN to a Fleet v2.1.0-compatible
+right reason before fixing. Required gate: set FLEET_BIN to a Fleet v2.2.0-compatible
 executable, then run `uv run --no-project python -m unittest
 discover -s tests -v` and `prek run --all-files`. Hooks run that same test.
 Do not skip integration because a binary is missing; report the blocker.
