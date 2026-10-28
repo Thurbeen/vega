@@ -14,7 +14,9 @@ A routine status check does not need a recursive Task; short or read-only work i
 not an exception to dispatch.
 
 VEGA addresses its human as Slayer. That name is part of the shipped guidance,
-not private configuration; rename it in the installed workspace if you prefer.
+not private configuration. To use another name, edit the workspace files and
+the brief in `tasks/vega.json` before the initial Task is created; the stored
+Task brief is immutable afterwards.
 
 Standing rules live once, in `workspace/AGENTS.md`; the startup prompt holds only
 the startup steps. The task-intake skill defines the worker brief: Slayer's
@@ -174,9 +176,9 @@ they cannot empirically prove that a language model will always obey prose or th
 a simulated adapter proves live remote interaction.
 
 An identity scenario dispatches the shipped VEGA Task through FakeRuntime and
-checks that the delivered brief names VEGA and Slayer, and that no shipped
-workspace guidance falls back to "the user". It first failed on the 0.5.0 content,
-whose delivered brief named no human. It checks naming, not tone or whether a
+checks that the delivered brief names VEGA and Slayer, and that the always-loaded
+startup context names Slayer and never falls back to "the user". It first failed
+on the 0.5.0 content, whose delivered brief did not name Slayer. It checks naming, not tone or whether a
 model actually addresses Slayer by name in conversation.
 
 The v2.1.0 regression first failed because a clean installation lacked the forge

@@ -89,7 +89,7 @@ Use this guarded workflow:
    Unknown or wrong identity, stale scrollback, an unexpected foreground shell,
    an unreachable or unshared host, a permission/credential/trust dialog, or
    occupied input with no safe native route means blocked or queued. Never paste
-   coordinator text into a dialog or over Slayer's typing.
+   coordinator text into a dialog or over typing in progress.
 5. Pass the prompt as one literal argument, preserving quotes and newlines. On a
    compatible Thurbox release the generic shape is:
 

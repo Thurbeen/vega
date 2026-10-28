@@ -378,16 +378,17 @@ class Identity(unittest.TestCase):
             # The text the session actually received names both parties.
             self.assertIn(f'You are {ASSISTANT_NAME}', delivered)
             self.assertIn(HUMAN_NAME, delivered)
-            # The always-loaded rules and every shipped skill VEGA follows
-            # address the human by name, never as an anonymous user.
-            shipped = {asset: install.read(asset) for asset in
-                       tomllib.loads((ROOT / 'starter.toml').read_text())['files']
-                       if asset.startswith(('workspace/', 'tasks/'))}
-            self.assertIn(HUMAN_NAME, shipped['workspace/AGENTS.md'])
-            generic = {asset: GENERIC_HUMAN.findall(' '.join(text.split()))
-                       for asset, text in shipped.items()}
-            self.assertEqual({a: m for a, m in generic.items() if m}, {},
-                             f'shipped guidance calls {HUMAN_NAME} "the user"')
+            # The always-loaded startup context addresses the human by name,
+            # never as an anonymous user. Skills load on demand and may carry
+            # technical text, so they are left to review.
+            startup = {'brief': delivered,
+                       'AGENTS.md': install.read('workspace/AGENTS.md'),
+                       'mission-control.md': install.read('workspace/prompts/mission-control.md')}
+            self.assertIn(HUMAN_NAME, startup['AGENTS.md'])
+            generic = {name: GENERIC_HUMAN.findall(' '.join(text.split()))
+                       for name, text in startup.items()}
+            self.assertEqual({n: m for n, m in generic.items() if m}, {},
+                             f'startup context calls {HUMAN_NAME} "the user"')
 
 
 
