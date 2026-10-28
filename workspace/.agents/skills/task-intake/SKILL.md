@@ -17,7 +17,9 @@ Acknowledgement, clarification, dispatch itself and routine reporting of recorde
 Task or change-request status do not need recursive Tasks.
 
 Read workspace and target-repository instructions first. Run `fleet apply --help`
-and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`.
+and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`, and
+needs an engine that reports `version` 2.2.1 or later. On an older engine, tell
+the user it must be upgraded before you rely on the workspace rules below.
 Use the same configuration as Mission Control, never a guessed default store.
 Every command below assumes that exact path in `FLEET_CONFIG`; use
 `fleet --config PATH` explicitly when inheritance is uncertain. Include the
@@ -42,9 +44,9 @@ Give each Task its own workspace, in exactly one of two forms:
   - Use the exact URL mapped in the Mission Control config's
     `runtime.repositories`, for example the canonical
     `https://github.com/OWNER/REPO`; Fleet matches it byte for byte, with no
-    `.git` or SSH normalization. An unmapped URL fails the spawn (`SpawnRetry`,
-    naming `runtime.repositories`), so add the mapping yourself before
-    dispatching, never a checkout or a directory in its place:
+    `.git` or SSH normalization. An unmapped URL leaves the Task Pending with
+    `NeedsAttention`/`RepositoryUnmapped`, without spending a spawn attempt, so
+    add the mapping yourself, never a checkout or a directory in its place:
     1. Find an existing source checkout on the target host whose `origin` is that
        URL (`git -C PATH remote get-url origin`) and which has no branch named
        after `runtime.keyPrefix`. If there is none, several, or the mapping needs

@@ -329,7 +329,8 @@ class Workspaces(unittest.TestCase):
         self.assertEqual(len(creates), 1, status['status'].get('conditions'))
         self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
         intake = self.read('.agents/skills/task-intake/SKILL.md')
-        for rule in ['An unmapped URL fails the spawn',
+        for rule in ['An unmapped URL leaves the Task Pending with `NeedsAttention`/`RepositoryUnmapped`',
+                     'reports `version` 2.2.1 or later',
                      'add the mapping yourself',
                      'existing source checkout',
                      'ask the user and wait',
