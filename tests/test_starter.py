@@ -280,7 +280,8 @@ class Workspaces(unittest.TestCase):
         run('apply', '-f', str(resource), '--json')
         run('reconcile', '--max-passes', '3', '--json')
         status = json.loads(run('get', 'task', task['metadata']['name']))
-        calls = [json.loads(line) for line in (self.tmp / 'calls.jsonl').read_text().splitlines()]
+        log = self.tmp / 'calls.jsonl'
+        calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         creates = [c for c in calls if c[:2] == ['session', 'create']]
         return creates, status, source
 
@@ -291,9 +292,11 @@ class Workspaces(unittest.TestCase):
         # branch the runtime names, from the base the example gives.
         tasks = self.intake_tasks()
         self.assertTrue(tasks, 'task-intake ships no Task example')
+        for example in tasks:
+            self.assertIn('repositories', example['spec']['workspace'],
+                          f"Task example {example['metadata']['name']} still prepares a directory")
         task = tasks[0]
         workspace = task['spec']['workspace']
-        self.assertIn('repositories', workspace, 'the first Task example still prepares a directory')
         primary = workspace['repositories'][0]
         self.assertTrue(primary['ref'].startswith('origin/'),
                         'thurbox does not fetch: the example base must be a remote-tracking ref')
@@ -312,8 +315,8 @@ class Workspaces(unittest.TestCase):
         task = self.intake_tasks()[0]
         creates, status, _ = self.spawn(task, [])
         self.assertEqual(creates, [])
-        spawned = [c for c in status['status']['conditions'] if c['type'] == 'Spawned']
-        self.assertIn('runtime.repositories', spawned[0].get('message', ''))
+        spawned = [c.get('message', '') for c in status['status']['conditions'] if c['type'] == 'Spawned']
+        self.assertIn('runtime.repositories', ' '.join(spawned), status['status']['conditions'])
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         for rule in ['An unmapped URL fails the spawn',
                      'report it instead of adding a mapping',
