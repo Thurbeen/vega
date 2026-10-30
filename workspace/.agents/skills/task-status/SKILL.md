@@ -135,7 +135,8 @@ outcome, without sensitive prompt text. There is no Fleet audit command and no
 reason to mutate Task status.
 
 Retained Concluded sessions may receive follow-up coordination, but their immutable
-result is not replaced. A new substantive request requires a new Task.
+result is not replaced. A new substantive request requires a new Task;
+task-intake's routing rule says when a follow-up goes to the owner instead.
 
 `fleet declare NAME --change-request URL` ensures a ChangeRequest mirror and
 appends a worker declaration. Inspect `status.declared`, `status.forge` and

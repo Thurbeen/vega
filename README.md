@@ -10,6 +10,8 @@ from design and research through implementation, review, writing and operationsâ
 runs in a bounded worker Task with its own workspace. VEGA itself only
 routes and steers work, including guarded direct prompts to an existing owned
 Task session, resolves dependencies, checks recorded evidence and reports state.
+A follow-up on work a live Task already owns goes to that Task with
+`fleet send`, not to a new Task.
 A routine status check does not need a recursive Task; short or read-only work is
 not an exception to dispatch.
 
@@ -55,7 +57,7 @@ this checkout, its Git directory, tests, local configuration or arbitrary files.
 | --- | --- |
 | `workspace/AGENTS.md` | VEGA's workspace instructions |
 | `workspace/prompts/mission-control.md` | Startup and coordination prompt |
-| `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a Task |
+| `workspace/.agents/skills/task-intake/SKILL.md` | Route a follow-up to its owner, or create and dispatch a Task |
 | `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
 | `config/fleet.toml` | Working Thurbox runtime configuration |
 | `tasks/vega.json` | JSON array containing the initial VEGA Task template |

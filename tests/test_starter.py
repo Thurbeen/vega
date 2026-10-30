@@ -115,6 +115,20 @@ class Starter(unittest.TestCase):
                 self.assertIn(safety_rule.lower(), normalized_status)
             self.assertIn('new substantive request', task_status.lower())
             self.assertIn('new task', task_status.lower())
+            # Mission Control routes a follow-up to the live Task that owns the
+            # work before it prepares a new Task, so it reads the rule first.
+            route = intake.find('## Route a follow-up')
+            self.assertNotEqual(route, -1, 'task-intake routes follow-ups')
+            self.assertLess(route, intake.find('## Prepare'))
+            routing = ' '.join(intake[route:intake.find('## Prepare')].split())
+            for rule in ['fleet send TASK TEXT', '`WorkerGone`', '`status.session`',
+                         'Concluded', 'takes precedence', 'self-contained',
+                         'new bounded result', 'separate worker']:
+                self.assertIn(rule, routing)
+            self.assertNotIn('a new request needs a new task',
+                             ' '.join(intake.split()).lower())
+            self.assertIn('route a follow-up',
+                          ' '.join(instructions.split()).lower())
             # The emitted production config must parse via Fleet, unchanged.
             config = install / 'config/fleet.toml'
             production = tomllib.loads(config.read_text())

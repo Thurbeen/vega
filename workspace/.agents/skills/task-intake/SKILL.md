@@ -1,6 +1,6 @@
 ---
 name: task-intake
-description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.2.1. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Route a follow-up to the live Task that owns the work, or dispatch every new substantive requested deliverable as a bounded Task in Fleet v2.2.1. Load whenever a user requests work, follows up on existing work, or asks Mission Control to start a worker.
 license: MIT
 ---
 
@@ -24,6 +24,51 @@ Use the same configuration as Mission Control, never a guessed default store.
 Every command below assumes that exact path in `FLEET_CONFIG`; use
 `fleet --config PATH` explicitly when inheritance is uncertain. Include the
 resolved path in each child brief and require it for every Fleet operation.
+
+## Route a follow-up
+
+Check whether an existing Task owns the request before you prepare a new Task.
+Run `fleet list task --json`, then `fleet status task NAME --json` for each
+candidate. A follow-up is a question, correction or extension about work a Task
+already owns. A second worker on that work loses the owner's context and can
+edit the same files or branch.
+
+Answer the user directly, with no message and no new Task, when recorded status,
+a result or the workspace files already answer the question.
+
+Send the follow-up to the owner with `fleet send TASK TEXT` when both conditions
+are true:
+
+- The request concerns what that Task owns: its document, change request,
+  branch or question.
+- Its session is live: the phase is `Spawned`, `Briefed` or `Concluded`,
+  `status.session` is not null, the Task is not deleting, and no `WorkerGone`
+  condition has status `True`. A Concluded Task with a live session still
+  receives messages.
+
+Create a new Task when one of these conditions is true:
+
+- The request asks for a new bounded result.
+- The owner's session is gone: `WorkerGone` is `True`, `status.session` is null,
+  the phase is `Stalled`, or the Task is deleting.
+- The work needs a different repository, harness or workspace.
+- The user asks for a separate worker.
+
+A failed status read leaves the session state unknown. Ask or retry; do not
+create a duplicate worker.
+
+A message cannot change the brief. The worker can receive a queued message
+after it has acted on earlier ones. Write each message as self-contained:
+
+- State it as an addition to the brief, or as a correction that takes
+  precedence over the brief.
+- Name the document, change request or branch it concerns.
+- Repeat the constraints the brief carries: the exact config path, the
+  publishing limits, `fleet declare`, and the `<!-- fleet:worker <task uid> -->`
+  marker.
+
+Send one message by one route. task-status describes delivery evidence and the
+guarded direct route for a working turn.
 
 ## Prepare
 
@@ -225,8 +270,8 @@ report that exact blocker and create a bounded recovery Task when possible. If n
 dispatch is possible, say so plainly. Never take over the requested assignment
 inline or claim that it started.
 
-Only `dispatch` and `forge` are mutable in an existing Task spec. A new request
-needs a new Task. Do not supply status, uid, generation or ownerReferences on create.
+Only `dispatch` and `forge` are mutable in an existing Task spec. A new bounded
+result needs a new Task. Do not supply status, uid, generation or ownerReferences on create.
 Setting dispatch false does not stop an already spawned session. Do not delete
 another worker's Task as a retry strategy or treat an ambiguous runtime probe as
 permission to spawn a replacement.

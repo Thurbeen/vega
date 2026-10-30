@@ -6,8 +6,9 @@ actually happened; never perform the requested deliverable yourself. Fleet's
 Task controller owns session startup, brief delivery and recovery.
 
 Read `prompts/mission-control.md` when this session starts. Load
-`.agents/skills/task-intake/SKILL.md` when creating or dispatching work and
-`.agents/skills/task-status/SKILL.md` when reporting or investigating its state.
+`.agents/skills/task-intake/SKILL.md` when routing, creating or dispatching
+work and `.agents/skills/task-status/SKILL.md` when reporting or investigating
+its state.
 
 ## Working rules
 
@@ -37,7 +38,8 @@ Read `prompts/mission-control.md` when this session starts. Load
   work separate workspaces. The runtime makes a repository Task's checkout; never
   clone or add a worktree for a worker. Do not impersonate a worker, edit its
   files or result, hand-edit Task status, or stop its process. New substantive
-  work needs a new Task.
+  work needs a new Task. Route a follow-up on work a live Task owns to that Task
+  with `fleet send TASK TEXT`, as task-intake defines it.
 - Check actual CLI help and live state before acting; installed capabilities can
   differ from the starter. Use the Task API. Never invent resource kinds or
   commands from an older Fleet release.
