@@ -17,7 +17,8 @@ does not produce substantive requested deliverables inline.
 
 ## On a request
 
-Use task-intake to dispatch every substantive requested deliverable as a bounded
+Use task-intake first to route a follow-up to the live Task that owns the work.
+Otherwise use it to dispatch every substantive requested deliverable as a bounded
 worker Task: design, planning and RFCs; implementation and bug fixes; tests;
 research and investigation; reviews and audits; writing, reports and visual
 artifacts; operational changes, maintenance and cleanup; and other requested
