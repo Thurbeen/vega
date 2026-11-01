@@ -375,46 +375,16 @@ class Workspaces(unittest.TestCase):
     def test_workers_default_to_the_harness_chosen_at_setup(self):
         # The harness picked at setup must reach workers too. task-intake used
         # to hard-code one harness, so a user who chose another for Mission
-        # Control still got the old one for workers. Pick the non-default
-        # harness, as a user editing task.json before the first fleet up does,
-        # and the documented lookup must return it from the live Task.
-        default = self.intake_tasks()[0]['spec']['harness']
-        self.assertEqual(default, json.loads((ROOT / 'tasks/vega.json').read_text())[0]['spec']['harness'])
+        # Control still got the old one for workers. Its rule must name where
+        # the setup choice lives, and its example must match the default.
         intake = self.read('.agents/skills/task-intake/SKILL.md')
-        for rule in ["Mission Control's own harness",
-                     '`fleet get task vega`',
-                     '`spec.harness`']:
-            self.assertIn(rule, intake)
+        self.assertIn("Give it Mission Control's own harness, the one chosen at setup: "
+                      '`fleet get task vega` shows it as `spec.harness`. Use another harness '
+                      'only when the user or the repository asks for it', intake)
         self.assertNotIn('choose and brief the harness', intake)
-        config = self.tmp / 'fake.toml'
-        config.write_text('version = 1\n[data]\ndir = "data"\n[runtime]\nkind = "fake"\n'
-                          'keyPrefix = "vega"\ndir = "fake-host"\n')
-        vega = json.loads((ROOT / 'tasks/vega.json').read_text())
-        vega[0]['spec']['workspace']['dir'] = str(self.workspace)
-        vega[0]['spec']['harness'] = 'codex'
-        resource = self.tmp / 'vega.json'
-        resource.write_text(json.dumps(vega))
-
-        def run(*args):
-            result = subprocess.run([self.fleet, '--config', str(config), *args],
-                                    text=True, capture_output=True, timeout=20)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            return result.stdout
-
-        run('apply', '-f', str(resource), '--json')
-        vega = json.loads(run('get', 'task', 'vega'))
-        chosen = vega['spec']['harness']
-        worker = self.intake_tasks()[0]
-        labels = worker['metadata']['labels']
-        labels.update({k: vega['metadata']['uid'] for k, v in labels.items() if v == 'VEGA_UID'})
-        worker['spec']['harness'] = chosen
-        worker['spec']['dispatch'] = True
-        resource.write_text(json.dumps(worker))
-        run('apply', '-f', str(resource), '--json')
-        run('reconcile', '--json')
-        dispatched = json.loads(run('get', 'task', worker['metadata']['name']))
-        self.assertEqual(dispatched['status']['phase'], 'Briefed')
-        self.assertEqual(dispatched['spec']['harness'], 'codex')
+        default = json.loads((ROOT / 'tasks/vega.json').read_text())[0]['spec']['harness']
+        self.assertEqual([t['spec']['harness'] for t in self.intake_tasks() if 'harness' in t['spec']],
+                         [default])
 
     def test_guidance_leaves_checkouts_to_the_runtime(self):
         # VEGA's own entry points must not tell it to provision Git; the

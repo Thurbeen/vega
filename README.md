@@ -35,10 +35,11 @@ Install a compatible Fleet binary, Thurbox and an authenticated supported harnes
 Run `fleet init`, then `fleet up` and read those commands' help for config
 overrides and platform-specific discovery.
 
-Choose the coding agent at setup. Mission Control runs on `claude` by default, and its workers inherit Mission
-Control's harness unless a request asks for another. To pick another harness,
-such as `codex`, set `spec.harness` in the installed workspace's `task.json`
-after `fleet init` and before the first `fleet up`:
+Choose the coding agent at setup. Mission Control runs on `claude` by default,
+and its workers inherit Mission Control's harness unless the user or the
+repository asks for another. To pick another harness, such as `codex`, set
+`spec.harness` in the installed workspace's `task.json` after `fleet init` and
+before the first `fleet up`:
 
 ```text
 fleet init
