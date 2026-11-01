@@ -402,8 +402,11 @@ class Workspaces(unittest.TestCase):
             return result.stdout
 
         run('apply', '-f', str(resource), '--json')
-        chosen = json.loads(run('get', 'task', 'vega'))['spec']['harness']
+        vega = json.loads(run('get', 'task', 'vega'))
+        chosen = vega['spec']['harness']
         worker = self.intake_tasks()[0]
+        labels = worker['metadata']['labels']
+        labels.update({k: vega['metadata']['uid'] for k, v in labels.items() if v == 'VEGA_UID'})
         worker['spec']['harness'] = chosen
         worker['spec']['dispatch'] = True
         resource.write_text(json.dumps(worker))
