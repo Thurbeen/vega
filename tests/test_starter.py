@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -268,6 +269,10 @@ class Workspaces(unittest.TestCase):
                           + ''.join(f'{json.dumps(url)} = {json.dumps(str(source))}\n' for url in mapped))
         task = json.loads(json.dumps(task))
         task['spec']['dispatch'] = True
+        # No VEGA Task exists here to be the parent; MissionControl covers it.
+        labels = task['metadata'].get('labels', {})
+        for key in [k for k in labels if k.startswith('gateway.fleet.dev/parent')]:
+            del labels[key]
         resource = self.tmp / 'task.json'
         resource.write_text(json.dumps(task))
 
@@ -330,7 +335,7 @@ class Workspaces(unittest.TestCase):
         self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         for rule in ['An unmapped URL leaves the Task Pending with `NeedsAttention`/`RepositoryUnmapped`',
-                     'reports `version` 2.2.1 or later',
+                     'reports `version` 2.7.3 or later',
                      'add the mapping yourself',
                      'existing source checkout',
                      'ask the user and wait',
@@ -388,6 +393,178 @@ class Workspaces(unittest.TestCase):
             self.assertIn(rule, intake)
         status = self.read('.agents/skills/task-status/SKILL.md')
         self.assertIn('unpushed commits', status)
+
+
+def sh_blocks(text):
+    """The shell commands a skill or prompt ships, in order."""
+    return [block.split('```', 1)[0].strip() for block in text.split('```sh\n')[1:]]
+
+
+class MissionControl(unittest.TestCase):
+    """VEGA answers at once, keeps its state in Fleet and can be cleared.
+
+    Mission Control used to wait in the foreground for its workers, grow its
+    context until the harness compacted it, and keep serial lanes, owners and
+    pending questions in its own memory files. These checks run the commands
+    the installed guidance ships against the real Fleet binary with
+    FakeRuntime: a worker reports back through VEGA's inbox, the status digest
+    rebuilds the whole working state from Fleet, and the clear protocol is two
+    ordinary inbox deliveries. They cannot prove a model obeys the prose.
+    """
+
+    def setUp(self):
+        fleet = os.environ.get('FLEET_BIN')
+        self.assertTrue(fleet, 'Set FLEET_BIN to the compatible Fleet binary; integration is required')
+        self.assertTrue(shutil.which('jq'), 'the status digest needs jq')
+        self.tmp = Path(tempfile.mkdtemp(prefix='vega-test-', dir=ROOT))
+        self.addCleanup(shutil.rmtree, self.tmp)
+        for asset in tomllib.loads((ROOT / 'starter.toml').read_text())['files']:
+            if asset.startswith('workspace/'):
+                target = self.tmp / asset
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / asset, target)
+        self.workspace = self.tmp / 'workspace'
+        # The guidance assumes `fleet` on PATH and FLEET_CONFIG exported.
+        bin_dir = self.tmp / 'bin'
+        bin_dir.mkdir()
+        (bin_dir / 'fleet').symlink_to(Path(fleet).resolve())
+        self.config = self.tmp / 'fleet.toml'
+        self.config.write_text('version = 1\n[data]\ndir = "data"\n[runtime]\nkind = "fake"\ndir = "fake-host"\n')
+        self.env = dict(os.environ, PATH=f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
+                        FLEET_CONFIG=str(self.config))
+        vega = json.loads((ROOT / 'tasks/vega.json').read_text())
+        vega[0]['spec']['workspace']['dir'] = str(self.workspace)
+        self.apply(vega)
+        self.fleet('reconcile', '--json')
+        self.assertEqual(self.get('vega')['status']['phase'], 'Briefed')
+
+    def sh(self, command, **subst):
+        for key, value in subst.items():
+            command = command.replace(key, value)
+        result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command], text=True,
+                                capture_output=True, timeout=20, env=self.env, cwd=self.tmp)
+        self.assertEqual(result.returncode, 0, command + '\n' + result.stdout + result.stderr)
+        return result.stdout
+
+    def fleet(self, *args):
+        return self.sh(' '.join(['fleet', *map(shlex.quote, args)]))
+
+    def get(self, name):
+        return json.loads(self.fleet('get', 'task', name))
+
+    def apply(self, resource):
+        path = self.tmp / 'resource.json'
+        path.write_text(json.dumps(resource))
+        self.fleet('apply', '-f', str(path), '--json')
+
+    def text(self, asset):
+        return (self.workspace / asset).read_text()
+
+    def worker(self, name, dispatch, **labels):
+        """The task-intake example, as VEGA fills it in for one request."""
+        intake = self.text('.agents/skills/task-intake/SKILL.md')
+        task = json.loads(intake.split('```json\n', 1)[1].split('```', 1)[0])
+        task['metadata']['name'] = name
+        uid = self.sh(sh_blocks(intake)[0]).strip()
+        task['metadata']['labels'] = {key: uid if value == 'VEGA_UID' else value
+                                      for key, value in task['metadata']['labels'].items()}
+        task['metadata']['labels'].update(labels)
+        task['spec']['dispatch'] = dispatch
+        return task
+
+    def test_always_loaded_guidance_stays_small(self):
+        # Every turn pays for AGENTS.md and the startup prompt; they used to
+        # repeat each other at about 1,400 words.
+        words = sum(len(self.text(a).split()) for a in ['AGENTS.md', 'prompts/mission-control.md'])
+        self.assertLessEqual(words, 800)
+
+    def test_guidance_never_waits_in_the_foreground(self):
+        surfaces = {a: self.text(a) for a in [
+            'AGENTS.md', 'prompts/mission-control.md',
+            '.agents/skills/task-intake/SKILL.md', '.agents/skills/task-status/SKILL.md',
+            '.agents/skills/status-digest/SKILL.md']}
+        surfaces['tasks/vega.json'] = (ROOT / 'tasks/vega.json').read_text()
+        for asset, text in surfaces.items():
+            # Only commands count: the prose may name what it forbids.
+            fenced = text.split('```')[1::2]
+            inline = ''.join(text.split('```')[0::2]).split('`')[1::2]
+            for command in fenced + inline:
+                for blocking in ['--wait-turn', 'sleep ', 'until ', 'while ', 'watch ',
+                                 'session wait']:
+                    self.assertNotIn(blocking, command, asset)
+        for asset in ['AGENTS.md', 'prompts/mission-control.md', 'tasks/vega.json']:
+            flat = ' '.join(surfaces[asset].split()).lower()
+            self.assertIn('never wait in the foreground', flat, asset)
+            self.assertIn('background', flat, asset)
+        for asset in ['AGENTS.md', 'prompts/mission-control.md']:
+            flat = ' '.join(surfaces[asset].split()).lower()
+            self.assertIn('fleet is the source of truth', flat, asset)
+            self.assertIn('user preferences only', flat, asset)
+
+    def test_a_worker_reports_back_through_vegas_inbox(self):
+        # VEGA does not wait for a worker: the parent labels task-intake puts
+        # on every Task relay its Questions, change requests and result into
+        # VEGA's own session as Fleet messages.
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile', '--json')
+        self.assertEqual(self.get('fix-login')['status']['phase'], 'Briefed')
+        self.fleet('declare', 'fix-login', '--json',
+                   '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
+        self.fleet('reconcile', '--json')
+        self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'shipped',
+                   '--summary', 'Opened the draft')
+        self.fleet('reconcile', '--json')
+        received = [r['key'] for r in self.get('vega')['status']['deliveries']['receipts']
+                    if r['from'] == 'gateway/child/fix-login']
+        self.assertEqual(len(received), 2, received)
+        self.assertTrue(received[-1].endswith('/result/1'), received)
+
+    def test_the_status_digest_rebuilds_state_from_fleet(self):
+        # Serial lanes, limits, open questions and change ownership live on
+        # the Tasks, so a cleared or restarted VEGA reads them back from Fleet.
+        digest_skill = self.text('.agents/skills/status-digest/SKILL.md')
+        digest, set_label, release = sh_blocks(digest_skill)
+        self.apply(self.worker('fix-login', True, **{'vega.fleet.dev/limits': 'draft-only no-merge'}))
+        self.apply(self.worker('fix-logout', False, **{'vega.fleet.dev/after': 'fix-login'}))
+        self.fleet('reconcile', '--json')
+        self.fleet('declare', 'fix-login', '--json',
+                   '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
+        board = self.sh(digest).splitlines()
+        self.assertEqual(len(board), 2, board)
+        lines = {line.split()[0]: line for line in board}
+        self.assertNotIn('vega', lines)
+        self.assertIn('limits:draft-only no-merge', lines['fix-login'])
+        self.assertIn('ask:q1', lines['fix-login'])
+        self.assertIn('held', lines['fix-logout'])
+        self.assertIn('after:fix-login', lines['fix-logout'])
+        self.assertNotIn('{', '\n'.join(board), 'the digest must not dump JSON')
+        self.fleet('send', 'fix-login', '--answers', 'q1', 'Yes')
+        self.sh(set_label, NAME='fix-logout')
+        self.assertIn('needs:', self.sh(digest))
+        self.assertNotIn('ask:q1', self.sh(digest))
+        generation = self.get('fix-logout')['metadata']['generation']
+        self.sh(release, NAME='fix-logout')
+        released = self.get('fix-logout')
+        self.assertTrue(released['spec']['dispatch'])
+        self.assertFalse({'vega.fleet.dev/after', 'vega.fleet.dev/needs'}
+                         & set(released['metadata'].get('labels', {})))
+        self.assertEqual(released['metadata']['labels']['gateway.fleet.dev/parent'], 'vega')
+        self.assertEqual(released['metadata']['generation'], generation + 1)
+
+    def test_vega_clears_its_context_through_its_own_inbox(self):
+        # Fleet types inbox messages into an idle session in order, so the
+        # harness's clear command and the re-hydration prompt arrive as two
+        # ordinary deliveries once VEGA's turn ends.
+        prompt = self.text('prompts/mission-control.md')
+        clear = [b for b in sh_blocks(prompt) if '/clear' in b]
+        self.assertEqual(len(clear), 1, 'mission-control must ship one clear command block')
+        self.sh(clear[0])
+        inbox = [entry['text'] for entry in self.get('vega')['status']['inbox']]
+        self.assertEqual(inbox[0], '/clear')
+        self.assertIn('prompts/mission-control.md', inbox[1])
+        self.fleet('reconcile', '--json')
+        self.fleet('reconcile', '--json')
+        self.assertFalse(self.get('vega')['status'].get('inbox'))
 
 
 

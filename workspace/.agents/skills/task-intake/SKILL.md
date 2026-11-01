@@ -1,38 +1,42 @@
 ---
 name: task-intake
-description: Dispatch every substantive requested deliverable as a bounded Task in Fleet v2.2.1. Load whenever a user requests work or asks Mission Control to start a worker.
+description: Dispatch every substantive requested deliverable as a bounded Task that reports back into Mission Control's inbox. Load whenever a user requests work or asks Mission Control to start a worker.
 license: MIT
 ---
 
 # Create a Task
 
 VEGA is dispatch-only: every substantive requested deliverable belongs to a
-worker Task, including design/planning/RFCs, implementation, bug fixing, tests,
-research/investigation, reviews/audits, writing/reports/visual artifacts,
-operational changes, maintenance, cleanup and other work. Shortness, read-only
-scope, convenience or urgency is not an exception. A request without a repository
+worker Task, however short, read-only or urgent. A request without a repository
 still gets one owner, a concrete result and an isolated workspace, which is a
-`dir` only when the user explicitly asks for it.
-Acknowledgement, clarification, dispatch itself and routine reporting of recorded
-Task or change-request status do not need recursive Tasks.
+`dir` only when the user explicitly asks for it. Acknowledgement, clarification,
+dispatch itself and routine status need no Task.
 
-Read workspace and target-repository instructions first. Run `fleet apply --help`
-and `fleet version --json`; this skill targets `fleet/v1alpha1`, kind `Task`, and
-needs an engine that reports `version` 2.2.1 or later. On an older engine, tell
-the user it must be upgraded before you rely on the workspace rules below.
-Use the same configuration as Mission Control, never a guessed default store.
-Every command below assumes that exact path in `FLEET_CONFIG`; use
-`fleet --config PATH` explicitly when inheritance is uncertain. Include the
-resolved path in each child brief and require it for every Fleet operation.
+This skill needs an engine that reports `version` 2.7.3 or later. Commands
+assume `FLEET_CONFIG` holds Mission Control's configuration; use
+`fleet --config PATH` when inheritance is uncertain, never a guessed store, and
+require that exact path for every Fleet operation in each child brief. Read
+`fleet --help` or a subcommand's help only when a command is refused.
 
 ## Prepare
 
-Confirm the request's repository when one exists, intended result, necessary
-permissions and checks. Retain the user's requested serial order, permitted
-parallel lanes, skipped work and publication/merge/deploy limits in briefs and
-follow-up steering. Read only the repository instructions necessary to choose
-and brief the harness; verify it is installed and already authenticated. Choose
-a unique lowercase DNS-like Task name.
+Confirm the repository when one exists, the intended result, the permissions
+and the checks. Read only the repository instructions needed to choose and brief
+the harness. Choose a unique lowercase DNS-like Task name.
+
+Record the user's ordering and limits on the Tasks, not in your memory:
+
+- Serial work: create every Task in the lane now. Dispatch the first; create
+  each later one with `dispatch` false and label `vega.fleet.dev/after` naming
+  its predecessor. Parallel lanes are Tasks without `after`. Skipped work gets
+  no Task.
+- Limits such as `draft-only no-merge`: label `vega.fleet.dev/limits` and state
+  them in the brief.
+- A decision only the user can make before the work starts: create the Task
+  with `dispatch` false and label `vega.fleet.dev/needs`, then ask.
+- Label `vega.fleet.dev/request` with the request in a few words.
+
+status-digest shows these labels and how to change them.
 
 Give each Task its own workspace, in exactly one of two forms:
 
@@ -61,11 +65,10 @@ Give each Task its own workspace, in exactly one of two forms:
        candidate in its place; then remove the scratch directory. A
        `fleet list` passing proves nothing: it does not open the runtime.
     3. A running `fleet up` re-reads `runtime.repositories` before each sweep,
-       so the mapping applies without a restart. A Task dispatched before it
-       waits in Pending with `NeedsAttention`/`RepositoryUnmapped` and spawns
-       within about 30 seconds of the mapping. An invalid edit leaves the last
-       valid mapping in force. Other config settings still need a restart:
-       leave those to the user, and never stop the engine yourself.
+       so the mapping applies without a restart and a waiting Task then spawns.
+       An invalid edit leaves the last valid mapping in force. Other config
+       settings need a restart: leave those to the user, and never stop the
+       engine yourself.
   - `ref` is optional and opaque to Fleet. Thurbox uses it as the base of a
     worktree created in the mapped source checkout, and it does not fetch, so
     name a remote-tracking ref such as `origin/main` and have the worker confirm
@@ -88,18 +91,34 @@ Give each Task its own workspace, in exactly one of two forms:
   Existing `dir` Tasks finish in place; their specs are immutable, so never
   rewrite or move them.
 
-Write a JSON file using the following shape, replacing every example value.
-Use a JSON serializer for values containing quotes, slashes or newlines.
+Write the manifest with a JSON serializer to `dispatch/NAME.json` in this
+workspace, replacing every example value, and never echo the brief in a reply.
+The file is only input to `fleet apply`; Fleet keeps the Task, so the file is
+safe to delete. The two `gateway.fleet.dev/parent` labels make Fleet relay the
+worker's Questions, declared changes and result into VEGA's own inbox, which is
+how Mission Control hears back without waiting. Replace `VEGA_UID` with:
+
+```sh
+fleet get task vega | jq -r .metadata.uid
+```
 
 ```json
 {
   "apiVersion": "fleet/v1alpha1",
   "kind": "Task",
-  "metadata": {"name": "inspect-project"},
+  "metadata": {
+    "name": "inspect-project",
+    "labels": {
+      "gateway.fleet.dev/parent": "vega",
+      "gateway.fleet.dev/parent-uid": "VEGA_UID",
+      "vega.fleet.dev/request": "inspect the project",
+      "vega.fleet.dev/limits": "no-publish"
+    }
+  },
   "spec": {
     "harness": "codex",
     "host": "local",
-    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Record the result through fleet result using the generation of the delivered brief.",
+    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
     "workspace": {"repositories": [
       {"name": "app", "url": "https://forge.example/acme/app", "ref": "origin/main"}
     ]},
@@ -108,30 +127,30 @@ Use a JSON serializer for values containing quotes, slashes or newlines.
 }
 ```
 
+Every brief names the exact Fleet config path, the concrete result, the checks,
+the limits, and how to ask: `fleet declare NAME --json
+'{"kind":"Question","id":"q1","text":"..."}'`, then wait for the answer in the
+inbox. For a reported issue, the brief requires a failing end-to-end reproducer
+first, and an implementation brief requires the repository's tests and
+publishing gate.
+
 ## Forge worker brief
 
-When opening a change is authorized, include these rules in the brief and keep
-these rules yourself: open every change as a draft; run
-`fleet declare TASK --change-request URL` immediately after opening it; end every
-forge post with `<!-- fleet:worker <task uid> -->` on its own line, obtaining the
-uid from `fleet get task TASK`. Use the repository's publishing skill, or the
-installed publish skill if the repository has none. Creating a Task does not
-authorize publication, merging or deployment. Workers do not merge.
+When opening a change is authorized, put these rules in the brief:
+open every change as a draft; run `fleet declare TASK --change-request URL`
+immediately after opening it; end every forge post with `<!-- fleet:worker <task uid> -->`
+on its own line, the uid from `fleet get task TASK`. Name the repository's
+publishing skill, or the installed publish skill if it has none. A Task does not
+authorize publication, merging or deployment, and workers do not merge.
 
-When an authorized deliverable is a pull or merge request, the worker is not
-done until it has produced and declared the real change URL. Verify the requested
-base plus the checks, CI and review evidence required by the user or repository
-for that delivery stage; a local commit or blocked required gate is not completion.
-A draft-only deliverable may conclude after the declared URL and its required
-draft-stage gates, while Fleet continues following the change separately. Do not
-impose publication on design, research, status or other Tasks whose requested
-result does not include it.
-
-Declaration requires a delivered brief and configured forge host, and ensures a
-ChangeRequest mirror while recording the declaration on the Task. It does not
-conclude the Task. Follow feedback through its inbox; a result does not end forge
-following or release the session. Fleet follows only declared changes, never
-marks ready a change opened ready, and relays unmarked posts back as feedback.
+A pull or merge request deliverable is done only once the real change URL is
+declared and the base, checks, CI and review required by the user or repository
+for that delivery stage pass; a local commit or a blocked required gate is not
+completion. A draft-only deliverable may conclude after its declared URL and
+draft-stage gates while Fleet keeps following the change. Do not impose
+publication on Tasks whose requested result does not include it. Declaring
+concludes nothing; feedback reaches the worker's inbox, and Fleet follows only
+declared changes.
 
 ## Optional execution defaults
 
@@ -179,54 +198,37 @@ Apply a provider, then its config, then the Task, for example:
 }
 ```
 
-TaskConfig supports harness, host, model, ordered `envFrom` and string `env`.
-Brief, workspace and outputs belong to each Task. Explicit Task execution fields
-override defaults; `model: null` disables inheritance and explicit `host: "local"`
-overrides a remote default. Model selection requires a matching native
-`runtime.modelEnv` harness mapping; do not invent a Codex variable.
-
-EnvProvider supports string `data` and ordered `sources`. A file source uses
-`{"type":"file","path":"/absolute/private/env.json"}`. A command source uses
-`type: "command"`, absolute `program`, optional `args`, absolute `cwd` and
-`timeoutMs` from 1 through 15000. Both run/read on the manager, even for remote
-Tasks; no implicit shell, PATH lookup or tilde expansion. Commands require a
-manager lease above 20000 ms. Use only trusted helpers: FakeRuntime still runs
-explicit provider commands.
-
-File contents and command stdout must be one UTF-8 JSON object of string values,
-at most 64 KiB. Environment names match `[A-Za-z_][A-Za-z0-9_]*`; case collisions
-within a map and NUL values are refused. Later maps override case variants.
-Precedence, lowest to highest: provider data, provider sources in order,
-TaskConfig envFrom in order, TaskConfig env, Task env, runtime model selection.
-Merged key/value bytes are also bounded to 64 KiB.
-
-Literal env/data and source definitions are visible in resource reads; keep
-credentials external and private. Successful resolution freezes privately
-before launch; later config/provider edits affect future resolutions only.
-Missing or invalid references/sources block launch observably; fix the input
-and reconcile. Do not remove a frozen launch snapshot to refresh credentials.
-Snapshots are plaintext: protect the store and backups. No background refresh
-occurs. Config/provider specs are mutable; frozen Task execution is unchanged.
+TaskConfig supports harness, host, model, ordered `envFrom` and string `env`;
+explicit Task fields override it, and model selection needs a matching
+`runtime.modelEnv` mapping. EnvProvider supports string `data` and ordered file
+or command `sources`, read on the manager. Resolution freezes privately before
+launch, so later edits affect only future launches. Literal values are visible
+in resource reads and snapshots are plaintext: keep credentials in external
+private sources. Read Fleet's TaskConfig and EnvProvider resource documentation
+for sources, precedence and limits before writing anything beyond these examples.
 
 ## Apply and dispatch
 
-1. Check `fleet get task NAME` before applying. If it already exists, inspect
-   it; never reuse a name for a different request. A failed read is not evidence
-   that the Task is absent unless it explicitly reports not found.
-2. Run `fleet apply -f task.json --json` to create the suspended Task.
-3. When its prerequisites are satisfied and work is authorized, set only
-   `spec.dispatch` to `true` in that same file and apply it again.
-4. The engine's running `fleet up` reconciles it. For a deliberately bounded
-   manual run, use `fleet reconcile --max-passes 10 --json`.
-5. Use task-status to read the recorded result and verify the evidence.
+1. Check `fleet get task NAME` first. If it exists, inspect it; never reuse a
+   name for a different request. A failed read is not evidence that the Task is
+   absent unless it explicitly reports not found.
+2. Run `fleet apply -f dispatch/NAME.json --json` to create the suspended Task.
+3. When its prerequisites are met, the work is authorized and it is not held,
+   set only `spec.dispatch` to `true` in that file and apply it again.
+4. Reply at once with the `Dispatched:` line. Never wait for the spawn, poll
+   `fleet list` or read the result in the same turn: the running `fleet up`
+   reconciles it and Fleet delivers the worker's messages into your session.
+   Run `fleet reconcile` only when the user asks for it while `fleet up` is
+   down, in the harness's background facility.
 
 If the engine, authentication, resources or another prerequisite blocks dispatch,
 report that exact blocker and create a bounded recovery Task when possible. If no
 dispatch is possible, say so plainly. Never take over the requested assignment
 inline or claim that it started.
 
-Only `dispatch` and `forge` are mutable in an existing Task spec. A new request
-needs a new Task. Do not supply status, uid, generation or ownerReferences on create.
-Setting dispatch false does not stop an already spawned session. Do not delete
-another worker's Task as a retry strategy or treat an ambiguous runtime probe as
-permission to spawn a replacement.
+Only `dispatch`, `forge` and labels change on an existing Task. A new request
+needs a new Task. Do not supply status, uid or generation on create. Setting
+dispatch false does not stop an already spawned session. Do not delete another
+worker's Task as a retry strategy or treat an ambiguous runtime probe as
+permission to spawn a replacement. A held Task that never spawned may be deleted
+and recreated when its brief must change.
