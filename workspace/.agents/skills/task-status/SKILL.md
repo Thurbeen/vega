@@ -1,20 +1,21 @@
 ---
 name: task-status
-description: Inspect Task state and worker evidence or coordinate directly with an existing owned Task session. Load for progress questions, completion checks, steering, unknown state or recovery investigation.
+description: Inspect one Task's state and worker evidence or coordinate directly with an existing owned Task session. Load for completion checks, steering, unknown state or recovery investigation; use status-digest for routine status.
 license: MIT
 ---
 
 # Report current Task state
 
-Run `fleet version --json` and use the exact Mission Control configuration
-for every operation, explicitly with `fleet --config PATH` or inherited
-`FLEET_CONFIG`. These examples require Fleet v2.2.1 capabilities.
+Use the exact Mission Control configuration for every operation, explicitly
+with `fleet --config PATH` or inherited `FLEET_CONFIG`. Routine status is the
+status-digest board; open one Task only when a line needs a closer look:
 
 ```text
-fleet list task --json
-fleet status task NAME --json
+fleet status task NAME
 fleet get task NAME
 ```
+
+Summarize what you read in a line or two; never paste the resource.
 
 Read phase, conditions, observedGeneration, brief receipt, session reference and
 result together. A phase alone is not sufficient evidence. Compare observations
@@ -37,17 +38,14 @@ change-request status reporting may use the minimal live checks in this skill.
 | Releasing | Deletion is waiting for session cleanup; do not bypass the finalizer. |
 
 Inspect CLI errors and exit codes; never turn an unreadable store into an empty
-queue. Do not poll in a tight agent loop or compete with the engine's manager.
-A bounded `fleet reconcile --max-passes 10 --json` can advance an explicitly
-requested manual check; it is not a background service.
+queue. Never poll or wait in the foreground, and do not compete with the
+engine's manager: changes reach you as Fleet messages in your inbox.
 
 ## Execution, inbox and declared changes
 
-Inspect `status.execution` for the frozen harness/host/model and source resource
-identities. Resolved environment values stay in private launch snapshots, outside
-resource reads. Inspect referenced defaults with `fleet get taskconfig NAME` and
-`fleet get envprovider NAME`; passive resources have no lifecycle phase. Their
-current specs may differ from a Task's frozen execution.
+`status.execution` holds the frozen harness, host, model and source resources;
+resolved values stay in private launch snapshots, and current TaskConfig or
+EnvProvider specs may differ from it.
 
 Read `fleet send --help` and `fleet declare --help`. `fleet send NAME "MESSAGE"`
 queues a message; success means queued, not delivered. Inspect `status.inbox`,
@@ -105,8 +103,8 @@ Use this guarded workflow:
    in the same composer, identity and foreground are unchanged, and no dialog or
    shell replaced it. Only then may `session key UUID enter --json` submit that
    known text. If any check is uncertain, do not press a key. It must not approve
-   a trust or permission prompt. Use a bounded `--wait-turn --timeout SECONDS` or
-   documented event stream when available, never an agent-side polling loop.
+   a trust or permission prompt. Do not wait for the worker's answer: end your
+   turn, and its declarations and result reach your inbox through Fleet.
 
 Read the runtime JSON and process exit code together:
 
@@ -129,10 +127,10 @@ desired or direct interaction is unsafe; supply the exact config as in
 `fleet --config /path/to/fleet.toml send TASK TEXT`. It waits for a ready session
 through the controller and can produce a Fleet delivery receipt; CLI success
 initially means queued. A direct runtime send creates no Fleet inbox entry or
-Fleet delivery receipt. If local accountability is needed, write a small private
-receipt outside shared source with Task, session, host, time and observed delivery
-outcome, without sensitive prompt text. There is no Fleet audit command and no
-reason to mutate Task status.
+Fleet delivery receipt. If accountability is needed, record it in Fleet on your
+own Task, without sensitive prompt text:
+`fleet declare vega --json '{"kind":"Note","text":"steered NAME: outcome"}'`.
+Never mutate Task status or keep the record in agent memory.
 
 Retained Concluded sessions may receive follow-up coordination, but their immutable
 result is not replaced. A new substantive request requires a new Task.

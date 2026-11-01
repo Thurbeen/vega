@@ -1,7 +1,7 @@
 # VEGA
 
 VEGA is the generic Mission Control workspace bundled with Fleet v2's
-engine. It contains instructions, prompts, two agent skills, a minimal runtime
+engine. It contains instructions, prompts, three agent skills, a minimal runtime
 configuration and one initial Task. Fleet is the engine; VEGA is editable content
 running as an ordinary Task.
 
@@ -13,7 +13,7 @@ Task session, resolves dependencies, checks recorded evidence and reports state.
 A routine status check does not need a recursive Task; short or read-only work is
 not an exception to dispatch.
 
-This starter targets Fleet v2.2.1, resource API `fleet/v1alpha1` and native config
+This starter targets Fleet v2.7.3, resource API `fleet/v1alpha1` and native config
 schema 1. That release also serves TaskConfig, EnvProvider and ChangeRequest;
 these are optional and the initial bundle still creates only Task `vega`.
 The `fleet init` / `fleet up` flow requires Fleet's bootstrap implementation;
@@ -57,6 +57,7 @@ this checkout, its Git directory, tests, local configuration or arbitrary files.
 | `workspace/prompts/mission-control.md` | Startup and coordination prompt |
 | `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a Task |
 | `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
+| `workspace/.agents/skills/status-digest/SKILL.md` | One line per Task, rebuilt from Fleet, and the labels that hold order and limits |
 | `config/fleet.toml` | Working Thurbox runtime configuration |
 | `tasks/vega.json` | JSON array containing the initial VEGA Task template |
 | `LICENSE` | MIT license and retained attribution |
@@ -83,7 +84,40 @@ The skills are also standard `SKILL.md` packages. From a source checkout,
 `npx skills add . --list` discovers them; install only the skills you need.
 Installing skills alone does not create a Fleet config, workspace or VEGA Task.
 
-## Fleet v2.2.1 capabilities
+## Background work, small context, Fleet as memory
+
+VEGA never waits in the foreground. task-intake labels every worker with
+`gateway.fleet.dev/parent` and `parent-uid` naming the `vega` Task, so Fleet
+relays the worker's Questions, declared changes and result into VEGA's inbox
+and types them into its session when it is idle. VEGA replies right after
+dispatch and reports when such a message arrives; it runs no sleep, until or
+watch loop.
+
+Fleet is the source of truth. Serial order, authorization limits, decisions
+waiting on the user and the request itself are `vega.fleet.dev/*` labels on the
+Tasks; held work is a Task with `dispatch` false; change ownership is the
+Task's declared ChangeRequest; open worker Questions are declarations without
+an answer. The status-digest skill prints all of it as one line per Task. Agent
+memory holds user preferences only.
+
+Because nothing lives only in the conversation, VEGA can clear its context.
+After a reply that dispatched or reported, it queues the harness's `/clear`
+and a re-hydration prompt into its own inbox with `fleet send vega`; Fleet
+delivers them in order once the session is idle, and VEGA rebuilds its working
+state from the digest. The prompts VEGA reads every turn are kept under 800
+words, and replies use a fixed `Dispatched:` / `Done:` / `Needs you:` shape.
+
+```mermaid
+flowchart LR
+  User -->|request| VEGA
+  VEGA -->|apply Task with parent labels| Fleet
+  Fleet -->|spawn and brief| Worker
+  Worker -->|declare Question, change, result| Fleet
+  Fleet -->|inbox message when idle| VEGA
+  VEGA -->|Dispatched / Done / Needs you| User
+```
+
+## Fleet v2.7.3 capabilities
 
 A Task's `spec.workspace` is `{"repositories": [{"name", "url", "ref"?}]}` or
 `{"dir": PATH}`. task-intake routes every Task to the first form: the
@@ -137,15 +171,15 @@ comes from the delivered brief, even after a later forge/dispatch edit.
 
 All commands and child briefs must address the same resolved configuration via
 `--config PATH` or inherited `FLEET_CONFIG`. Do not initialize a second store.
-See Fleet v2.2.1's [resource contracts](https://github.com/Thurbeen/fleet/tree/v2.2.1/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.2.1/docs/configuration)
+See Fleet v2.7.3's [resource contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/resources)
+and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/configuration)
 for the full engine contract. This starter adds no engine code or replacement
 controller.
 
 ## Verify source content
 
-Source contributors need Python 3.11 or newer, `uv`, and a Fleet v2.2.1-compatible
-executable. No Python package dependencies are required. Set `FLEET_BIN`
+Source contributors need Python 3.11 or newer, `uv`, `jq`, and a Fleet
+v2.7.3-compatible executable. No Python package dependencies are required. Set `FLEET_BIN`
 to the absolute executable path, then run:
 
 ```text
@@ -187,6 +221,16 @@ refuse a relative source without touching the live store. The stand-in is a
 POSIX script, so that class skips on Windows. It does not prove a live Thurbox
 worktree, its cleanup or its source freshness.
 
+The v0.6.0 regression first failed because Mission Control waited for its
+workers in the foreground and kept its lanes and questions in its own memory.
+It runs the commands the installed guidance ships against the real binary: a
+worker labelled by task-intake reports its Question and result into VEGA's
+inbox; the status digest rebuilds held lanes, limits, open questions and
+change ownership from Fleet alone; the label and release commands change
+labels and dispatch without touching the brief; and the clear protocol lands as
+two ordered inbox deliveries. It also bounds the words VEGA reads every turn
+and refuses blocking waits in any shipped command. VEGA also needs `jq`.
+
 FakeRuntime is test-only. This test does not log in to a harness, start live
 Thurbox sessions, validate Windows startup, or prove the engine's concurrent
 `init/up` and update implementation. The engine repository owns those tests.
@@ -197,6 +241,6 @@ required before publication. See [.publish.yaml](.publish.yaml).
 
 MIT, copyright 2026 Thurbeen. The license is retained from Fleet's public MIT
 license. The forge worker rules are retained from Fleet v2.1.0's bundled VEGA
-workspace. Other workspace guidance is informed by Fleet v2.2.1's public resource
-and configuration contracts and checked against the v2.2.1 CLI. Legacy
+workspace. Other workspace guidance is informed by Fleet v2.7.3's public resource
+and configuration contracts and checked against the v2.7.3 CLI. Legacy
 Python queue skills and operator configuration were not copied.
