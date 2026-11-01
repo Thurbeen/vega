@@ -70,7 +70,7 @@ flowchart LR
   creates the worktrees from source checkouts mapped in `runtime.repositories`,
   and by default deletes them, their branch and unpushed commits with the
   session. See [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
-- **Forge work.** Workers open drafts, declare them with `fleet declare TASK
+- **Forge work.** Authorized workers open drafts, declare them with `fleet declare TASK
   --change-request URL` and end every post with `<!-- fleet:worker <task uid> -->`. Forge following needs an
   operator-configured `[forge.hosts]` entry and an authenticated forge CLI; the
   template configures neither, and Fleet does not merge changes. Creating a Task
