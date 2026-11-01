@@ -30,9 +30,11 @@ branch or fetch starter content during first-run initialization.
    paths containing quotes. Reject any unresolved placeholder.
 5. Install the rendered array as `vega/task.json` relative to the bootstrap
    root selected by the engine. Its Task is `vega`, API `fleet/v1alpha1`, with
-   harness `codex`, host `local` and dispatch enabled. Select any harness/model
-   customization before initial creation; the stored Task spec is immutable
-   except for dispatch and forge. Do not manufacture uid, status or finalizers.
+   harness `claude`, host `local` and dispatch enabled. Select any harness/model
+   customization before initial creation, by editing the installed
+   `task.json` before the first `fleet up`; the stored Task spec is immutable
+   except for dispatch and forge. task-intake gives workers Mission Control's
+   `spec.harness` by default. Do not manufacture uid, status or finalizers.
 6. Apply through the Task API and persist identity. Repeated startup must inspect
    and reconnect to the existing Task, including its session and effect receipts.
    Do not regenerate identity, erase the store or spawn on an unknown probe.

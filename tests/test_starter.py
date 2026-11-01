@@ -136,6 +136,8 @@ class Starter(unittest.TestCase):
             task = tasks[0]
             self.assertEqual(task['metadata'], {'name': 'vega'})
             self.assertEqual(task['kind'], 'Task')
+            # Mission Control and, by default, its workers run on claude.
+            self.assertEqual(task['spec']['harness'], 'claude')
             self.assertEqual(task['spec']['workspace']['dir'], '{{workspace}}')
             task['spec']['workspace']['dir'] = str(workspace)
             rendered = install / 'vega.json'
@@ -172,7 +174,7 @@ class Starter(unittest.TestCase):
             name = worker['metadata']['name']
             configured = run('get', 'task', name, cfg=fake)
             self.assertEqual(configured['status']['phase'], 'Briefed')
-            self.assertEqual(configured['status']['execution']['harness'], 'codex')
+            self.assertEqual(configured['status']['execution']['harness'], 'claude')
             uid = configured['metadata']['uid']
             snapshot = json.loads((install / f'config/data/launches/{uid}.json').read_text())
             self.assertEqual(snapshot['env']['PROJECT_MODE'], 'focused')
@@ -369,6 +371,47 @@ class Workspaces(unittest.TestCase):
             self.assertEqual(result.returncode, code, result.stdout + result.stderr)
         self.assertFalse(live.exists())
         self.assertFalse((self.tmp / 'calls.jsonl').exists())
+
+    def test_workers_default_to_the_harness_chosen_at_setup(self):
+        # The harness picked at setup must reach workers too. task-intake used
+        # to hard-code one harness, so a user who chose another for Mission
+        # Control still got the old one for workers. Pick the non-default
+        # harness, as a user editing task.json before the first fleet up does,
+        # and the documented lookup must return it from the live Task.
+        default = self.intake_tasks()[0]['spec']['harness']
+        self.assertEqual(default, json.loads((ROOT / 'tasks/vega.json').read_text())[0]['spec']['harness'])
+        intake = self.read('.agents/skills/task-intake/SKILL.md')
+        for rule in ["Mission Control's own harness",
+                     '`fleet get task vega`',
+                     '`spec.harness`']:
+            self.assertIn(rule, intake)
+        self.assertNotIn('choose and brief the harness', intake)
+        config = self.tmp / 'fake.toml'
+        config.write_text('version = 1\n[data]\ndir = "data"\n[runtime]\nkind = "fake"\n'
+                          'keyPrefix = "vega"\ndir = "fake-host"\n')
+        vega = json.loads((ROOT / 'tasks/vega.json').read_text())
+        vega[0]['spec']['workspace']['dir'] = str(self.workspace)
+        vega[0]['spec']['harness'] = 'codex'
+        resource = self.tmp / 'vega.json'
+        resource.write_text(json.dumps(vega))
+
+        def run(*args):
+            result = subprocess.run([self.fleet, '--config', str(config), *args],
+                                    text=True, capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return result.stdout
+
+        run('apply', '-f', str(resource), '--json')
+        chosen = json.loads(run('get', 'task', 'vega'))['spec']['harness']
+        worker = self.intake_tasks()[0]
+        worker['spec']['harness'] = chosen
+        worker['spec']['dispatch'] = True
+        resource.write_text(json.dumps(worker))
+        run('apply', '-f', str(resource), '--json')
+        run('reconcile', '--json')
+        dispatched = json.loads(run('get', 'task', worker['metadata']['name']))
+        self.assertEqual(dispatched['status']['phase'], 'Briefed')
+        self.assertEqual(dispatched['spec']['harness'], 'codex')
 
     def test_guidance_leaves_checkouts_to_the_runtime(self):
         # VEGA's own entry points must not tell it to provision Git; the

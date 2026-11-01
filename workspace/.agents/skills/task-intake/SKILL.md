@@ -24,8 +24,11 @@ require that exact path for every Fleet operation in each child brief. Read
 ## Prepare
 
 Confirm the repository when one exists, the intended result, the permissions
-and the checks. Read only the repository instructions needed to choose and brief
-the harness. Choose a unique lowercase DNS-like Task name.
+and the checks. Read only the repository instructions needed to brief the
+worker. Give it Mission Control's own harness, the one chosen at setup:
+`fleet get task vega` shows it as `spec.harness`. Use another harness only when
+the user or the repository asks for it, and verify it is installed and already
+authenticated. Choose a unique lowercase DNS-like Task name.
 
 Record the user's ordering and limits on the Tasks, not in your memory:
 
@@ -95,7 +98,8 @@ Give each Task its own workspace, in exactly one of two forms:
   rewrite or move them.
 
 Write the manifest with a JSON serializer to `dispatch/NAME.json` in this
-workspace, replacing every example value, and never echo the brief in a reply.
+workspace, replacing every example value, `harness` included, and never echo the
+brief in a reply.
 The file is only input to `fleet apply`; Fleet keeps the Task, so the file is
 safe to delete. The two `gateway.fleet.dev/parent` labels make Fleet relay the
 worker's Questions, declared changes and result into VEGA's own inbox, which is
@@ -119,7 +123,7 @@ fleet get task vega | jq -r .metadata.uid
     }
   },
   "spec": {
-    "harness": "codex",
+    "harness": "claude",
     "host": "local",
     "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
     "workspace": {"repositories": [
@@ -177,7 +181,7 @@ Apply a provider, then its config, then the Task, for example:
   "kind": "TaskConfig",
   "metadata": {"name": "reviewer"},
   "spec": {
-    "harness": "codex",
+    "harness": "claude",
     "envFrom": [{"name": "project-env"}],
     "env": {"PROJECT_MODE": "careful"}
   }

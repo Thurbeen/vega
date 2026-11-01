@@ -32,9 +32,25 @@ flowchart LR
 ## First run
 
 Install a compatible Fleet binary, Thurbox and an authenticated supported harness.
-The starter's default harness is `codex`; choose an available harness before the
-initial Task is created if needed. Run `fleet init`, then `fleet up` and read
-those commands' help for config overrides and platform-specific discovery.
+Run `fleet init`, then `fleet up` and read those commands' help for config
+overrides and platform-specific discovery.
+
+### Choose the coding agent
+
+Mission Control runs on `claude` by default, and its workers inherit Mission
+Control's harness unless a request asks for another. To pick another harness,
+such as `codex`, set `spec.harness` in the installed workspace's `task.json`
+after `fleet init` and before the first `fleet up`:
+
+```text
+fleet init
+# edit <workspace>/task.json: "harness": "codex"
+fleet up
+```
+
+`fleet init` prints the config path; the workspace is that config's
+`starter.workspace`. The first `fleet up` creates Task `vega` from that file, and
+its harness is immutable afterwards, so choosing again needs a new Task.
 Check `fleet version --json` and subcommand help for the installed capabilities.
 The released Fleet binary must include this starter at an exact source commit;
 initial setup needs neither Git nor a Fleet source checkout.
