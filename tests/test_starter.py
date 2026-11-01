@@ -538,6 +538,9 @@ class MissionControl(unittest.TestCase):
         self.assertIn('held', lines['fix-logout'])
         self.assertIn('after:fix-login', lines['fix-logout'])
         self.assertNotIn('{', '\n'.join(board), 'the digest must not dump JSON')
+        # A failed or stuck predecessor must not start the rest of its lane.
+        for text in [digest_skill, self.text('prompts/mission-control.md')]:
+            self.assertIn('verified `shipped`', ' '.join(text.split()))
         self.fleet('send', 'fix-login', '--answers', 'q1', 'Yes')
         self.sh(set_label, NAME='fix-logout')
         self.assertIn('needs:', self.sh(digest))

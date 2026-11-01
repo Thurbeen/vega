@@ -32,7 +32,8 @@ into this conversation. Labels change no spec or brief. Set or replace one:
 fleet get task NAME | jq '.metadata.labels["vega.fleet.dev/needs"] = "choose a base branch" | del(.status)' | fleet apply -f -
 ```
 
-Release a held Task once its `after` Task concluded and nothing is needed:
+Release a held Task only when its `after` Task concluded with a verified
+`shipped` result and nothing is needed; any other outcome goes to the user:
 
 ```sh
 fleet get task NAME | jq '.spec.dispatch = true | .metadata.labels |= del(.["vega.fleet.dev/after"], .["vega.fleet.dev/needs"]) | del(.status)' | fleet apply -f -
