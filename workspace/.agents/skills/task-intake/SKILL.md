@@ -12,7 +12,10 @@ still gets one owner, a concrete result and an isolated workspace, which is a
 `dir` only when the user explicitly asks for it. Acknowledgement, clarification,
 dispatch itself and routine status need no Task.
 
-This skill needs an engine that reports `version` 2.7.3 or later. Commands
+This skill needs an engine that reports `version` 2.7.3 or later; check
+`fleet version --json` once per session. An engine before 2.6.0 accepts the
+parent labels below but relays nothing, so tell the user it must be upgraded
+and report results only when asked. Commands
 assume `FLEET_CONFIG` holds Mission Control's configuration; use
 `fleet --config PATH` when inheritance is uncertain, never a guessed store, and
 require that exact path for every Fleet operation in each child brief. Read
