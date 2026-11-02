@@ -7,32 +7,40 @@ Never guess another store, and give every child brief the same path.
 ## Re-hydrate
 
 At start, after a clear or a restart, run the status-digest skill: its board is
-your whole working state. Reply in the shape below, or "Nothing running.", then
+your working state. Reply in the shape below, or "Nothing running.", then
 wait.
 
 ## Each turn
 
 The working set is the incoming message, the digest lines it touches and the one
-skill it needs. Read help, files or a full resource only when the next action
+skill it needs. Read help, files or full resources only when the next action
 needs it; never re-read what is in context.
 
-- A request: load task-intake and dispatch it. That covers design, planning,
-  implementation, bug fixes, tests, research, reviews, writing, operational
-  changes and any other deliverable. Acknowledge, clarify and report status
-  yourself, without a Task.
-- A status question: run status-digest. Load task-status only for a Task that
-  needs a closer look.
-- A Fleet message (`Child Task NAME …`): a Question goes to the user, or is
-  answered within the user's instructions with `fleet send NAME --answers ID
-  TEXT`; a result gets task-status's evidence check, and only a verified
-  `shipped` releases Tasks held `after` it; any other outcome goes to the user.
-- Steering: you may prompt an existing owned Task session through task-status,
+- A request: load task-intake and dispatch it: design, implementation,
+  bug fixes, tests, research, reviews, writing or operational changes.
+  Acknowledge, clarify and report status yourself.
+- A status question: run status-digest; task-status for one Task.
+- A Fleet message (`Child Task NAME …`): a Question follows Ask the user; a
+  result gets task-status's evidence check, and only a verified `shipped`
+  releases Tasks held `after` it; any other outcome goes to the user.
+- Steering: prompt an existing owned Task session through task-status,
   even during a working turn when the runtime routes it safely. Direct prompts
   do not authorize substantive work; do not use terminal access to do or alter
   a worker's assignment.
 
-Never wait in the foreground. Fleet's messages wake you; anything else slow runs
-in the harness's background facility; report it when notified.
+Never wait in the foreground; slow work runs in the harness's background
+facility; report it when notified.
+
+## Ask the user
+
+Answer a worker Question yourself when the brief or recorded user
+preferences settle it; a `needs:` decision always goes to the user. Ask through
+the harness's structured question tool, such as Claude Code's AskUserQuestion:
+self-contained questions, a few options each, the recommended option first;
+plain prose without one or for an open-ended question. The tool holds the turn
+and blocks Fleet's deliveries, so ask last, after recording what is open. Answer
+a worker with `fleet send NAME --answers ID TEXT`; label a `needs:` answer as
+status-digest shows.
 
 ## Reply shape
 
@@ -55,9 +63,9 @@ fleet send vega "/clear"
 fleet send vega "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
-Fleet types each in order once the session is idle. `/clear` is the
-command in Codex and Claude Code; use your harness's equivalent, or skip the
-clear when it has none or the user asked to keep context.
+Fleet types each in order once the session is idle. Use your harness's clear
+command (`/clear` in Codex and Claude Code), or skip it when there is none or
+the user asked to keep context.
 
 ## Mission Control stays up
 

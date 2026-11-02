@@ -554,6 +554,34 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(released['metadata']['labels']['gateway.fleet.dev/parent'], 'vega')
         self.assertEqual(released['metadata']['generation'], generation + 1)
 
+    def test_questions_reach_the_user_as_choices_and_answers_go_back(self):
+        # A relayed worker Question used to reach the user as prose to be
+        # answered by typing "1A 2B". VEGA now asks through the harness's
+        # structured question tool when it has one and sends the choice back
+        # with the answer command it ships.
+        prompt = self.text('prompts/mission-control.md')
+        section = prompt.split('## Ask the user\n', 1)[1].split('\n## ', 1)[0]
+        flat = ' '.join(section.split())
+        for required in ['AskUserQuestion', 'structured question tool', 'recommended option first',
+                         'prose', 'open-ended', 'preferences',
+                         # A held Task's decision is the user's, and the tool
+                         # blocks Fleet's deliveries until it is answered.
+                         '`needs:` decision always goes to the user', 'ask last',
+                         'label a `needs:` answer as status-digest shows']:
+            self.assertIn(required, flat)
+        answer = [c for c in flat.split('`')[1::2] if '--answers' in c]
+        self.assertEqual(answer, ['fleet send NAME --answers ID TEXT'])
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile', '--json')
+        self.fleet('declare', 'fix-login', '--json',
+                   '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
+        digest = sh_blocks(self.text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.assertIn('ask:q1', self.sh(digest))
+        self.sh(answer[0].replace('TEXT', "'Keep it (Recommended)'"), NAME='fix-login', ID='q1')
+        self.assertNotIn('ask:q1', self.sh(digest))
+        inbox = [entry['text'] for entry in self.get('fix-login')['status']['inbox']]
+        self.assertTrue(any('Keep it (Recommended)' in text for text in inbox), inbox)
+
     def test_vega_clears_its_context_through_its_own_inbox(self):
         # Fleet types inbox messages into an idle session in order, so the
         # harness's clear command and the re-hydration prompt arrive as two
