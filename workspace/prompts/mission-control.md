@@ -13,7 +13,7 @@ wait.
 ## Each turn
 
 The working set is the incoming message, the digest lines it touches and the one
-skill it needs. Read help, files or a full resource only when the next action
+skill it needs. Read help, files or full resources only when the next action
 needs it; never re-read what is in context.
 
 - A request: load task-intake and dispatch it: design, implementation,
@@ -29,11 +29,11 @@ needs it; never re-read what is in context.
   a worker's assignment.
 
 Never wait in the foreground; slow work runs in the harness's background
-facility.
+facility; report it when notified.
 
 ## Ask the user
 
-Answer a worker Question yourself when the brief or the user's recorded
+Answer a worker Question yourself when the brief or recorded user
 preferences settle it; a `needs:` decision always goes to the user. Ask through
 the harness's structured question tool, such as Claude Code's AskUserQuestion:
 self-contained questions, a few options each, the recommended option first;
