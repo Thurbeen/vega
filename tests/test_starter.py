@@ -408,8 +408,8 @@ class MissionControl(unittest.TestCase):
     pending questions in its own memory files. These checks run the commands
     the installed guidance ships against the real Fleet binary with
     FakeRuntime: a worker reports back through VEGA's inbox, the status digest
-    rebuilds the whole working state from Fleet, and the clear protocol is two
-    ordinary inbox deliveries. They cannot prove a model obeys the prose.
+    rebuilds the whole working state from Fleet, and re-hydration is one
+    ordinary inbox delivery. They cannot prove a model obeys the prose.
     """
 
     def setUp(self):
@@ -582,17 +582,19 @@ class MissionControl(unittest.TestCase):
         inbox = [entry['text'] for entry in self.get('fix-login')['status']['inbox']]
         self.assertTrue(any('Keep it (Recommended)' in text for text in inbox), inbox)
 
-    def test_vega_clears_its_context_through_its_own_inbox(self):
-        # Fleet types inbox messages into an idle session in order, so the
-        # harness's clear command and the re-hydration prompt arrive as two
-        # ordinary deliveries once VEGA's turn ends.
+    def test_vega_rehydrates_through_its_own_inbox_without_a_clear(self):
+        # Fleet hands inbox messages to the agent's own inbox, not its
+        # composer, so a queued `/clear` would arrive as text. VEGA queues only
+        # the re-hydration prompt, an ordinary delivery.
         prompt = self.text('prompts/mission-control.md')
-        clear = [b for b in sh_blocks(prompt) if '/clear' in b]
-        self.assertEqual(len(clear), 1, 'mission-control must ship one clear command block')
-        self.sh(clear[0])
+        blocks = sh_blocks(prompt)
+        self.assertFalse([b for b in blocks if '/clear' in b], 'mission-control must not queue /clear')
+        rehydrate = [b for b in blocks if 'VEGA re-hydrate' in b]
+        self.assertEqual(len(rehydrate), 1, 'mission-control must ship one re-hydrate block')
+        self.sh(rehydrate[0])
         inbox = [entry['text'] for entry in self.get('vega')['status']['inbox']]
-        self.assertEqual(inbox[0], '/clear')
-        self.assertIn('prompts/mission-control.md', inbox[1])
+        self.assertEqual(len(inbox), 1, inbox)
+        self.assertIn('prompts/mission-control.md', inbox[0])
         self.fleet('reconcile', '--json')
         self.fleet('reconcile', '--json')
         self.assertFalse(self.get('vega')['status'].get('inbox'))
