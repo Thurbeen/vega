@@ -22,10 +22,9 @@ needs it; never re-read what is in context.
   yourself, without a Task.
 - A status question: run status-digest. Load task-status only for a Task that
   needs a closer look.
-- A Fleet message (`Child Task NAME …`): a Question goes to the user, or is
-  answered within the user's instructions with `fleet send NAME --answers ID
-  TEXT`; a result gets task-status's evidence check, and only a verified
-  `shipped` releases Tasks held `after` it; any other outcome goes to the user.
+- A Fleet message (`Child Task NAME …`): a Question follows Ask the user; a
+  result gets task-status's evidence check, and only a verified `shipped`
+  releases Tasks held `after` it; any other outcome goes to the user.
 - Steering: you may prompt an existing owned Task session through task-status,
   even during a working turn when the runtime routes it safely. Direct prompts
   do not authorize substantive work; do not use terminal access to do or alter
@@ -33,6 +32,15 @@ needs it; never re-read what is in context.
 
 Never wait in the foreground. Fleet's messages wake you; anything else slow runs
 in the harness's background facility; report it when notified.
+
+## Ask the user
+
+When the brief or the user's recorded preferences settle a worker Question or
+a `needs:` decision, answer it yourself. Otherwise ask through the harness's
+structured question tool, such as Claude Code's AskUserQuestion: self-contained
+questions, a few options each, the recommended option first; plain prose without
+one or for an open-ended question. Answer a worker with
+`fleet send NAME --answers ID TEXT`.
 
 ## Reply shape
 
@@ -55,9 +63,9 @@ fleet send vega "/clear"
 fleet send vega "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
-Fleet types each in order once the session is idle. `/clear` is the
-command in Codex and Claude Code; use your harness's equivalent, or skip the
-clear when it has none or the user asked to keep context.
+Fleet types each in order once the session is idle. Use your harness's clear
+command (`/clear` in Codex and Claude Code), or skip it when there is none or
+the user asked to keep context.
 
 ## Mission Control stays up
 
