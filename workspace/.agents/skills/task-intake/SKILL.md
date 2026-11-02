@@ -234,7 +234,8 @@ A message about an existing Task takes one of three paths:
 - `fleet send`: coordination, an answer or a heads-up. It changes no contract.
 - `fleet amend`: a change to what the Task must deliver or how, its scope,
   limits or instructions, held or running; see task-status.
-- A new Task: a different request, deliverable, repository, harness or host.
+- A new Task: a different request, deliverable, repository, harness or host,
+  or a brief that is wrong.
 
 Otherwise only `dispatch`, `forge` and labels change on an existing Task. Do not
 supply status, uid or generation on create. Setting dispatch false does not stop
