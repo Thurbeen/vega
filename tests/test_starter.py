@@ -563,7 +563,11 @@ class MissionControl(unittest.TestCase):
         section = prompt.split('## Ask the user\n', 1)[1].split('\n## ', 1)[0]
         flat = ' '.join(section.split())
         for required in ['AskUserQuestion', 'structured question tool', 'recommended option first',
-                         'prose', 'open-ended', 'preferences', '`needs:`']:
+                         'prose', 'open-ended', 'preferences',
+                         # A held Task's decision is the user's, and the tool
+                         # blocks Fleet's deliveries until it is answered.
+                         '`needs:` decision always goes to the user', 'ask last',
+                         'label a `needs:` answer as status-digest shows']:
             self.assertIn(required, flat)
         answer = [c for c in flat.split('`')[1::2] if '--answers' in c]
         self.assertEqual(answer, ['fleet send NAME --answers ID TEXT'])
