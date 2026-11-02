@@ -64,7 +64,7 @@ flowchart LR
   results into VEGA's inbox.
 - **Fleet as memory.** Order, limits, pending decisions and the request are
   `vega.fleet.dev/*` labels; held work has `dispatch` false. Agent memory holds
-  user preferences only, so VEGA can `/clear` its context and rebuild it from
+  user preferences only, so VEGA's context is disposable and rebuilt from
   the status digest. See [mission-control.md](workspace/prompts/mission-control.md).
 - **Workspaces.** Worker Tasks use `spec.workspace.repositories`; the runtime
   creates the worktrees from source checkouts mapped in `runtime.repositories`,
@@ -143,7 +143,7 @@ They also check:
 - repository workspaces through Fleet's Thurbox adapter with a recording
   `thurbox-cli` stand-in (POSIX only), including the unmapped-URL wait and the
   mapping check;
-- worker reports into VEGA's inbox, the status digest, labels, the clear
+- worker reports into VEGA's inbox, the status digest, labels, the re-hydrate
   protocol, the word budget of always-read guidance and the ban on blocking
   waits.
 
