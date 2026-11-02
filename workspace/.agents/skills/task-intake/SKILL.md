@@ -12,7 +12,7 @@ still gets one owner, a concrete result and an isolated workspace, which is a
 `dir` only when the user explicitly asks for it. Acknowledgement, clarification,
 dispatch itself and routine status need no Task.
 
-This skill needs an engine that reports `version` 2.7.3 or later; check
+This skill needs an engine that reports `version` 2.10.0 or later; check
 `fleet version --json` once per session. An engine before 2.6.0 accepts the
 parent labels below but relays nothing, so tell the user it must be upgraded
 and report results only when asked. Commands
@@ -229,9 +229,15 @@ report that exact blocker and create a bounded recovery Task when possible. If n
 dispatch is possible, say so plainly. Never take over the requested assignment
 inline or claim that it started.
 
-Only `dispatch`, `forge` and labels change on an existing Task. A new request
-needs a new Task. Do not supply status, uid or generation on create. Setting
-dispatch false does not stop an already spawned session. Do not delete another
-worker's Task as a retry strategy or treat an ambiguous runtime probe as
-permission to spawn a replacement. A held Task that never spawned may be deleted
-and recreated when its brief must change.
+A message about an existing Task takes one of three paths:
+
+- `fleet send`: coordination, an answer or a heads-up. It changes no contract.
+- `fleet amend`: a change to what the Task must deliver or how, its scope,
+  limits or instructions, held or running; see task-status.
+- A new Task: a different request, deliverable, repository, harness or host.
+
+Otherwise only `dispatch`, `forge` and labels change on an existing Task. Do not
+supply status, uid or generation on create. Setting dispatch false does not stop
+an already spawned session. Do not delete another worker's Task as a retry
+strategy or treat an ambiguous runtime probe as permission to spawn a
+replacement.

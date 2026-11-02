@@ -132,8 +132,8 @@ own Task, without sensitive prompt text:
 `fleet declare vega --json '{"kind":"Note","text":"steered NAME: outcome"}'`.
 Never mutate Task status or keep the record in agent memory.
 
-Retained Concluded sessions may receive follow-up coordination, but their immutable
-result is not replaced. A new substantive request requires a new Task.
+Retained Concluded sessions may receive follow-up coordination; `fleet send`
+never replaces their result. A new substantive request requires a new Task.
 
 `fleet declare NAME --change-request URL` ensures a ChangeRequest mirror and
 appends a worker declaration. Inspect `status.declared`, `status.forge` and
@@ -148,6 +148,23 @@ policy, worker completion and idle state; Fleet never merges a change. Missing
 observations and stale heads are not proof that checks or review passed.
 ChangeRequest mirrors outlive Tasks; deleting a Task does not delete its changes
 or mirrors. Do not declare or conclude another worker's work on its behalf.
+
+## Amend a Task
+
+When the user changes an existing Task's scope, limits or instructions, amend
+it. The brief stays as written; the amendment is added to it, kept in
+`spec.amendments` and delivered through the inbox to the same worker, its
+session and changes intact:
+
+```sh
+fleet amend TASK --text TEXT --reason REASON
+```
+
+It bumps the Task's generation; add `--if-generation N` to refuse unless the
+Task is still at generation N. Do not rely on the change until
+`status.brief.generation` reaches the new generation. A delivered amendment
+re-opens a Concluded Task, and the worker records a result for that generation.
+Never amend to start a different deliverable: that is a new Task.
 
 ## Worker completion
 

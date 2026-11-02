@@ -335,7 +335,7 @@ class Workspaces(unittest.TestCase):
         self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         for rule in ['An unmapped URL leaves the Task Pending with `NeedsAttention`/`RepositoryUnmapped`',
-                     'reports `version` 2.7.3 or later',
+                     'reports `version` 2.10.0 or later',
                      'add the mapping yourself',
                      'existing source checkout',
                      'ask the user and wait',
@@ -581,6 +581,43 @@ class MissionControl(unittest.TestCase):
         self.assertNotIn('ask:q1', self.sh(digest))
         inbox = [entry['text'] for entry in self.get('fix-login')['status']['inbox']]
         self.assertTrue(any('Keep it (Recommended)' in text for text in inbox), inbox)
+
+    def test_a_scope_change_amends_the_task_the_worker_already_has(self):
+        # The guidance used to say a brief never changes: a held Task was
+        # deleted and recreated, and a running worker could only be told by
+        # `fleet send`, which changes no contract. Since Fleet 2.10.0
+        # `fleet amend` adds to the brief, keeps the worker and re-opens a
+        # Concluded Task.
+        prompt = ' '.join(self.text('prompts/mission-control.md').split())
+        for required in ['`fleet amend`', "user's change", 'never to start a different deliverable']:
+            self.assertIn(required, prompt)
+        intake = ' '.join(self.text('.agents/skills/task-intake/SKILL.md').split())
+        for required in ['`fleet send`', '`fleet amend`', 'new Task', 'different request']:
+            self.assertIn(required, intake)
+        self.assertNotIn('recreated when its brief must change', intake)
+        self.assertNotIn('Only `dispatch`, `forge` and labels change', intake)
+        status = self.text('.agents/skills/task-status/SKILL.md')
+        amend = [b for b in sh_blocks(status) if 'fleet amend' in b]
+        self.assertEqual(len(amend), 1, 'task-status must ship one amend command block')
+        flat = ' '.join(status.split())
+        for required in ['status.brief.generation', 're-opens', '--if-generation']:
+            self.assertIn(required, flat)
+
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile', '--json')
+        self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'shipped',
+                   '--summary', 'Opened the draft')
+        self.fleet('reconcile', '--json')
+        self.assertEqual(self.get('fix-login')['status']['phase'], 'Concluded')
+        self.sh(amend[0], TASK='fix-login', TEXT="'Also cover logout.'",
+                REASON="'the user widened the scope'")
+        amended = self.get('fix-login')
+        self.assertEqual(amended['spec']['amendments'][0]['text'], 'Also cover logout.')
+        self.assertEqual(amended['metadata']['generation'], 2)
+        self.fleet('reconcile', '--json')
+        reopened = self.get('fix-login')['status']
+        self.assertEqual(reopened['phase'], 'Briefed')
+        self.assertEqual(reopened['brief']['generation'], 2)
 
     def test_vega_clears_its_context_through_its_own_inbox(self):
         # Fleet types inbox messages into an idle session in order, so the

@@ -13,7 +13,7 @@ Its rules are in [workspace/AGENTS.md](workspace/AGENTS.md).
 
 | Targets | |
 | --- | --- |
-| Fleet | v2.7.3, resource API `fleet/v1alpha1`, native config schema 1 |
+| Fleet | v2.10.0, resource API `fleet/v1alpha1`, native config schema 1 |
 | Initial resources | Task `vega` only; TaskConfig, EnvProvider and ChangeRequest are optional |
 | Not included | Engine install, harness login, engine code or controllers |
 
@@ -76,13 +76,14 @@ flowchart LR
   template configures neither, and Fleet does not merge changes. Creating a Task
   grants no permission to publish.
 - **Coordination.** `fleet send TASK "MESSAGE"` queues inbox delivery; check
-  its receipts, since queueing is not delivery. Direct prompts to an existing
+  its receipts, since queueing is not delivery. `fleet amend` carries the
+  user's change to a Task's scope or instructions to the same worker. Direct prompts to an existing
   session follow
   [task-status](workspace/.agents/skills/task-status/SKILL.md).
 
-The full engine contract is in Fleet v2.7.3's
-[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/configuration).
+The full engine contract is in Fleet v2.10.0's
+[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.10.0/docs/resources)
+and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.10.0/docs/configuration).
 
 ## Files
 
@@ -123,7 +124,7 @@ the engine's conflict report. Details are in [BOOTSTRAP.md](BOOTSTRAP.md).
 ## Verify source content
 
 Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet
-v2.7.3-compatible executable; there are no Python package dependencies. Set
+v2.10.0-compatible executable; there are no Python package dependencies. Set
 `FLEET_BIN` to the executable's absolute path, then run:
 
 ```text
@@ -157,5 +158,5 @@ the local gates are required before publishing; see [.publish.yaml](.publish.yam
 
 MIT, copyright 2026 Thurbeen, retained from Fleet's public MIT license. The forge
 worker rules come from Fleet v2.1.0's bundled VEGA workspace; other guidance is
-informed by Fleet v2.7.3's public contracts and checked against its CLI. Legacy
+informed by Fleet v2.10.0's public contracts and checked against its CLI. Legacy
 Python queue skills and operator configuration were not copied.

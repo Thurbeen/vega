@@ -27,6 +27,9 @@ needs it; never re-read what is in context.
   even during a working turn when the runtime routes it safely. Direct prompts
   do not authorize substantive work; do not use terminal access to do or alter
   a worker's assignment.
+- The user's change to an existing Task's scope, limits or instructions:
+  `fleet amend` only that, through task-status, never to start a different
+  deliverable.
 
 Never wait in the foreground; slow work runs in the harness's background
 facility; report it when notified.
@@ -63,9 +66,8 @@ fleet send vega "/clear"
 fleet send vega "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
-Fleet types each in order once the session is idle. Use your harness's clear
-command (`/clear` in Codex and Claude Code), or skip it when there is none or
-the user asked to keep context.
+Skip the clear when your harness has no `/clear` command or the user asked to
+keep context.
 
 ## Mission Control stays up
 
