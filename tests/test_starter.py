@@ -77,9 +77,12 @@ class Starter(unittest.TestCase):
             self.assertIn('without a repository', intake.lower())
             self.assertIn('isolated', intake.lower())
             self.assertIn('do not redo', task_status.lower())
-            # A brief not yet confirmed delivered is never resent or assumed started.
-            for reason in ['BriefUndelivered', 'WorkspaceUntrusted']:
-                self.assertIn(reason, task_status)
+            # A brief not yet confirmed delivered is never resent, and a session
+            # waiting on a person is never unblocked by answering its dialog.
+            flat_status = ' '.join(task_status.split())
+            for rule in ['BriefUndelivered', 'WorkspaceUntrusted', 'Never resend the brief',
+                         'never answer the dialog yourself']:
+                self.assertIn(rule, flat_status)
             for content in [intake, task_status]:
                 self.assertIn('required by the user or repository', content.lower())
                 self.assertIn('draft-only', content.lower())
@@ -622,8 +625,16 @@ class MissionControl(unittest.TestCase):
         self.fleet('reconcile', '--json')
         concluded = self.get('fix-login')
         self.assertEqual(concluded['status']['phase'], 'Concluded')
+        digest = sh_blocks(self.text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.assertIn('result:shipped', self.sh(digest))
         self.sh(amend[0], NAME='fix-login')
-        self.fleet('reconcile', '--json')
+        # Fleet keeps the old result until the worker answers the amendment,
+        # so the board must not show the follow-up as done.
+        for _ in range(2):
+            board = self.sh(digest)
+            self.assertIn('amended', board)
+            self.assertNotIn('result:shipped', board)
+            self.fleet('reconcile', '--json')
         amended = self.get('fix-login')
         self.assertEqual(amended['status']['phase'], 'Briefed')
         self.assertEqual(amended['status']['brief']['generation'], 2)
@@ -633,6 +644,8 @@ class MissionControl(unittest.TestCase):
                    '--summary', 'Covered the follow-up')
         self.fleet('reconcile', '--json')
         self.assertEqual(self.get('fix-login')['status']['phase'], 'Concluded')
+        self.assertIn('result:shipped', self.sh(digest))
+        self.assertNotIn('amended', self.sh(digest))
         # task-status must not still say a Concluded result is never replaced.
         status = ' '.join(self.text('.agents/skills/task-status/SKILL.md').split())
         self.assertNotIn('immutable result is not replaced', status)

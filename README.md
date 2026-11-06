@@ -13,7 +13,7 @@ Its rules are in [workspace/AGENTS.md](workspace/AGENTS.md).
 
 | Targets | |
 | --- | --- |
-| Fleet | v2.10.0 or later, checked against v2.22.0; resource API `fleet/v1alpha1`, native config schema 1 |
+| Fleet | v2.10.0 or later, checked against v2.23.1; resource API `fleet/v1alpha1`, native config schema 1 |
 | Initial resources | Task `vega` only; TaskConfig, EnvProvider and ChangeRequest are optional |
 | Not included | Engine install, harness login, engine code or controllers |
 
@@ -81,9 +81,9 @@ flowchart LR
   session and branch. Direct prompts to an existing session follow
   [task-status](workspace/.agents/skills/task-status/SKILL.md).
 
-The full engine contract is in Fleet v2.22.0's
-[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.22.0/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.22.0/docs/configuration).
+The full engine contract is in Fleet v2.23.1's
+[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.23.1/docs/resources)
+and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.23.1/docs/configuration).
 
 ## Files
 
@@ -158,5 +158,5 @@ the local gates are required before publishing; see [.publish.yaml](.publish.yam
 
 MIT, copyright 2026 Thurbeen, retained from Fleet's public MIT license. The forge
 worker rules come from Fleet v2.1.0's bundled VEGA workspace; other guidance is
-informed by Fleet v2.22.0's public contracts and checked against its CLI. Legacy
+informed by Fleet v2.23.1's public contracts and checked against its CLI. Legacy
 Python queue skills and operator configuration were not copied.

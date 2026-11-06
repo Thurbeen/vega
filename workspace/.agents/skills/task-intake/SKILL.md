@@ -248,9 +248,13 @@ The digest's `repo:` fields show which Tasks share a repository.
   The worker keeps its session, worktree, branch and declared changes. A
   delivered amendment re-opens a Concluded Task, and the worker's next result
   names the new generation. Fleet refuses an amend for a Stalled or deleting
-  Task or a full inbox. A retry passes `--if-generation N` with the generation
-  read before the first try, so it cannot land twice. Update the Task's
-  `limits` label when the user changes them.
+  Task or a full inbox. It accepts one while the worker is gone, but it waits
+  for a session Fleet never respawns, so follow up on a Task with
+  `attention:WorkerGone` with a new Task instead.
+  A retry passes `--if-generation N`, where N is `metadata.generation` read
+  before the first try; exit code 5 means the Task moved on, so re-read it
+  rather than assume the amend landed. Update the Task's `limits` label when
+  the user changes them.
 - Amendments only add. A wrong brief, or another deliverable, repository,
   harness or host, needs a new Task. `fleet send` is conversation: it changes
   no contract and re-opens nothing.

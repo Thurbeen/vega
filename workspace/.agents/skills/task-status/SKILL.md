@@ -34,7 +34,7 @@ change-request status reporting may use the minimal live checks in this skill.
 | Spawning, or Spawned without a `Briefed` condition | The brief is not confirmed delivered, so the work has not started. Never resend the brief or `fleet send` it. |
 | Briefed | Brief delivery is recorded; completion is not yet recorded. |
 | `BriefUndelivered`, `DeliveryQueued` or `WorkspaceUntrusted` attention | The session waits on a person, such as a trust dialog or text held in its mailbox. Report the condition's message to the user; never answer the dialog yourself. |
-| `Paused` condition True | Fleet stopped an idle agent; the next message or amendment resumes it. Not a failure. |
+| `Paused` condition True | The agent is stopped, by Fleet after idling or by someone else; Fleet resumes a dispatched Task for its next message or amendment. Not a failure. |
 | Stalled or other NeedsAttention | Explain the recorded condition. Check the runtime before proposing recovery. |
 | Unknown or disconnected runtime | State is unknown. Do not create a replacement blindly. |
 | Concluded with a result | A worker recorded a claim. Check the result and artifact evidence. |
