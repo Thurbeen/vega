@@ -77,6 +77,12 @@ class Starter(unittest.TestCase):
             self.assertIn('without a repository', intake.lower())
             self.assertIn('isolated', intake.lower())
             self.assertIn('do not redo', task_status.lower())
+            # A brief not yet confirmed delivered is never resent, and a session
+            # waiting on a person is never unblocked by answering its dialog.
+            flat_status = ' '.join(task_status.split())
+            for rule in ['BriefUndelivered', 'WorkspaceUntrusted', 'Never resend the brief',
+                         'never answer the dialog yourself']:
+                self.assertIn(rule, flat_status)
             for content in [intake, task_status]:
                 self.assertIn('required by the user or repository', content.lower())
                 self.assertIn('draft-only', content.lower())
@@ -335,7 +341,7 @@ class Workspaces(unittest.TestCase):
         self.assertEqual(creates[0][creates[0].index('--repo-path') + 1], str(source))
         intake = self.read('.agents/skills/task-intake/SKILL.md')
         for rule in ['An unmapped URL leaves the Task Pending with `NeedsAttention`/`RepositoryUnmapped`',
-                     'reports `version` 2.7.3 or later',
+                     'reports `version` 2.10.0 or later',
                      'add the mapping yourself',
                      'existing source checkout',
                      'ask the user and wait',
@@ -534,6 +540,8 @@ class MissionControl(unittest.TestCase):
         lines = {line.split()[0]: line for line in board}
         self.assertNotIn('vega', lines)
         self.assertIn('limits:draft-only no-merge', lines['fix-login'])
+        # The repository shows which live Tasks overlap or own a follow-up.
+        self.assertIn('repo:https://forge.example/acme/app', lines['fix-login'])
         self.assertIn('ask:q1', lines['fix-login'])
         self.assertIn('held', lines['fix-logout'])
         self.assertIn('after:fix-login', lines['fix-logout'])
@@ -589,6 +597,8 @@ class MissionControl(unittest.TestCase):
         prompt = self.text('prompts/mission-control.md')
         blocks = sh_blocks(prompt)
         self.assertFalse([b for b in blocks if '/clear' in b], 'mission-control must not queue /clear')
+        # Answering a re-hydrate with another one would loop on every reply.
+        self.assertIn('never queue one in reply to a re-hydrate', ' '.join(prompt.split()).lower())
         rehydrate = [b for b in blocks if 'VEGA re-hydrate' in b]
         self.assertEqual(len(rehydrate), 1, 'mission-control must ship one re-hydrate block')
         self.sh(rehydrate[0])
@@ -599,6 +609,47 @@ class MissionControl(unittest.TestCase):
         self.fleet('reconcile', '--json')
         self.assertFalse(self.get('vega')['status'].get('inbox'))
 
+    def test_a_follow_up_amends_the_existing_task(self):
+        # A follow-up to a Task's deliverable had only `fleet send`, which
+        # changes no contract and re-opens nothing, or a new Task, which loses
+        # the worker's session, worktree and declared change. The amend
+        # task-intake ships keeps all three, re-opens a Concluded Task and
+        # asks for a result for the new brief generation.
+        intake = self.text('.agents/skills/task-intake/SKILL.md')
+        amend = [b for b in sh_blocks(intake) if b.startswith('fleet amend')]
+        self.assertEqual(len(amend), 1, 'task-intake must ship one fleet amend command')
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile', '--json')
+        self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'shipped',
+                   '--summary', 'Opened the draft')
+        self.fleet('reconcile', '--json')
+        concluded = self.get('fix-login')
+        self.assertEqual(concluded['status']['phase'], 'Concluded')
+        digest = sh_blocks(self.text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.assertIn('result:shipped', self.sh(digest))
+        self.sh(amend[0], NAME='fix-login')
+        # Fleet keeps the old result until the worker answers the amendment,
+        # so the board must not show the follow-up as done.
+        for _ in range(2):
+            board = self.sh(digest)
+            self.assertIn('amended', board)
+            self.assertNotIn('result:shipped', board)
+            self.fleet('reconcile', '--json')
+        amended = self.get('fix-login')
+        self.assertEqual(amended['status']['phase'], 'Briefed')
+        self.assertEqual(amended['status']['brief']['generation'], 2)
+        self.assertEqual(amended['status']['session'], concluded['status']['session'])
+        self.assertEqual(len(amended['spec']['amendments']), 1)
+        self.fleet('result', 'fix-login', '--generation', '2', '--outcome', 'shipped',
+                   '--summary', 'Covered the follow-up')
+        self.fleet('reconcile', '--json')
+        self.assertEqual(self.get('fix-login')['status']['phase'], 'Concluded')
+        self.assertIn('result:shipped', self.sh(digest))
+        self.assertNotIn('amended', self.sh(digest))
+        # task-status must not still say a Concluded result is never replaced.
+        status = ' '.join(self.text('.agents/skills/task-status/SKILL.md').split())
+        self.assertNotIn('immutable result is not replaced', status)
+        self.assertIn('fleet amend', status)
 
 
 if __name__ == '__main__':

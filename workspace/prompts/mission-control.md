@@ -8,7 +8,7 @@ Never guess another store, and give every child brief the same path.
 
 At start, after a clear or a restart, run the status-digest skill: its board is
 your working state. Reply in the shape below, or "Nothing running.", then
-wait.
+end the turn.
 
 ## Each turn
 
@@ -19,6 +19,7 @@ needs it; never re-read what is in context.
 - A request: load task-intake and dispatch it: design, implementation,
   bug fixes, tests, research, reviews, writing or operational changes.
   Acknowledge, clarify and report status yourself.
+- A follow-up on a Task's deliverable: amend it through task-intake.
 - A status question: run status-digest; task-status for one Task.
 - A Fleet message (`Child Task NAME …`): a Question follows Ask the user; a
   result gets task-status's evidence check, and only a verified `shipped`
@@ -28,8 +29,7 @@ needs it; never re-read what is in context.
   do not authorize substantive work; do not use terminal access to do or alter
   a worker's assignment.
 
-Never wait in the foreground; slow work runs in the harness's background
-facility; report it when notified.
+Never wait in the foreground; slow work runs in the background.
 
 ## Ask the user
 
@@ -45,7 +45,7 @@ status-digest shows.
 ## Reply shape
 
 ```text
-Dispatched: NAME, one-line goal (running | held after OTHER)
+Dispatched: NAME, one-line goal (starting | held after OTHER)
 Done: NAME, outcome, URL
 Needs you: NAME ID, the question
 ```
@@ -63,10 +63,9 @@ turn:
 fleet send vega "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
-Fleet gives each message to your agent's own inbox, never to its composer, so
-a slash command sent this way is text, not a command. Do not send `/clear`.
-
-Leave clearing to the user or a future runtime action.
+Never queue one in reply to a re-hydrate. Fleet delivers to your agent's
+inbox, not its composer, so `/clear` sent this way is plain text: never send
+it. Clearing is the user's.
 
 ## Mission Control stays up
 

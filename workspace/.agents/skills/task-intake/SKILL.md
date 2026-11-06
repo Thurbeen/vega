@@ -12,10 +12,10 @@ still gets one owner, a concrete result and an isolated workspace, which is a
 `dir` only when the user explicitly asks for it. Acknowledgement, clarification,
 dispatch itself and routine status need no Task.
 
-This skill needs an engine that reports `version` 2.7.3 or later; check
-`fleet version --json` once per session. An engine before 2.6.0 accepts the
-parent labels below but relays nothing, so tell the user it must be upgraded
-and report results only when asked. Commands
+This skill needs an engine that reports `version` 2.10.0 or later; check
+`fleet version --json` once per session and tell the user when it must be
+upgraded. Before 2.10.0 there is no `fleet amend`; before 2.6.0 the parent
+labels below relay nothing, so report results only when asked. Commands
 assume `FLEET_CONFIG` holds Mission Control's configuration; use
 `fleet --config PATH` when inheritance is uncertain, never a guessed store, and
 require that exact path for every Fleet operation in each child brief. Read
@@ -24,8 +24,11 @@ require that exact path for every Fleet operation in each child brief. Read
 ## Prepare
 
 Confirm the repository when one exists, the intended result, the permissions
-and the checks. Read only the repository instructions needed to choose and brief
-the harness. Choose a unique lowercase DNS-like Task name.
+and the checks. Read the status digest first: a follow-up on a live or
+concluded Task's deliverable is an amendment, and another Task may already work
+in the same repository (see Follow-ups and overlapping work). Read only the
+repository instructions needed to brief the worker. Choose a unique lowercase
+DNS-like Task name.
 
 Record the user's ordering and limits on the Tasks, not in your memory:
 
@@ -99,7 +102,9 @@ workspace, replacing every example value, and never echo the brief in a reply.
 The file is only input to `fleet apply`; Fleet keeps the Task, so the file is
 safe to delete. The two `gateway.fleet.dev/parent` labels make Fleet relay the
 worker's Questions, declared changes and result into VEGA's own inbox, which is
-how Mission Control hears back without waiting. Replace `VEGA_UID` with:
+how Mission Control hears back without waiting. Set `harness` to Task
+`vega`'s `spec.harness` unless the user or the repository asks for another.
+Replace `VEGA_UID` with:
 
 ```sh
 fleet get task vega | jq -r .metadata.uid
@@ -229,8 +234,36 @@ report that exact blocker and create a bounded recovery Task when possible. If n
 dispatch is possible, say so plainly. Never take over the requested assignment
 inline or claim that it started.
 
-Only `dispatch`, `forge` and labels change on an existing Task. A new request
-needs a new Task. Do not supply status, uid or generation on create. Setting
+## Follow-ups and overlapping work
+
+The digest's `repo:` fields show which Tasks share a repository.
+
+- More context, an added ask or constraint, or a correction for an existing
+  Task's deliverable is an amendment, not a new Task:
+
+  ```sh
+  fleet amend NAME --text "Also cover the migration notes." --reason "the user asked"
+  ```
+
+  The worker keeps its session, worktree, branch and declared changes. A
+  delivered amendment re-opens a Concluded Task, and the worker's next result
+  names the new generation. Fleet refuses an amend for a Stalled or deleting
+  Task or a full inbox. It accepts one while the worker is gone, but it waits
+  for a session Fleet never respawns, so follow up on a Task with
+  `attention:WorkerGone` with a new Task instead.
+  A retry passes `--if-generation N`, where N is `metadata.generation` read
+  before the first try; exit code 5 means the Task moved on, so re-read it
+  rather than assume the amend landed. Update the Task's `limits` label when
+  the user changes them.
+- Amendments only add. A wrong brief, or another deliverable, repository,
+  harness or host, needs a new Task. `fleet send` is conversation: it changes
+  no contract and re-opens nothing.
+- Live Tasks on one repository get separate worktrees and branches but can
+  conflict when merged. When their work overlaps, hold the later one `after`
+  the earlier, or ask the user; otherwise run them in parallel.
+
+Only `dispatch`, `forge` and labels change through `fleet apply` on an existing
+Task. Do not supply status, uid or generation on create. Setting
 dispatch false does not stop an already spawned session. Do not delete another
 worker's Task as a retry strategy or treat an ambiguous runtime probe as
 permission to spawn a replacement. A held Task that never spawned may be deleted

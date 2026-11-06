@@ -30,9 +30,12 @@ change-request status reporting may use the minimal live checks in this skill.
 | Observation | Report or action |
 | --- | --- |
 | Pending with dispatch false | Work has not been authorized to start. |
-| Spawning or Spawned | Startup is in progress; inspect conditions and receipts. |
+| Pending with `RepositoryUnmapped` | Nothing spawned; map the repository through task-intake. `TrustUnmapped` needs a `runtime.workspaceTrust` entry and a restart: report it to the user. |
+| Spawning, or Spawned without a `Briefed` condition | The brief is not confirmed delivered, so the work has not started. Never resend the brief or `fleet send` it. |
 | Briefed | Brief delivery is recorded; completion is not yet recorded. |
-| Stalled or NeedsAttention | Explain the recorded condition. Check the runtime before proposing recovery. |
+| `BriefUndelivered`, `DeliveryQueued` or `WorkspaceUntrusted` attention | The session waits on a person, such as a trust dialog or text held in its mailbox. Report the condition's message to the user; never answer the dialog yourself. |
+| `Paused` condition True | The agent is stopped, by Fleet after idling or by someone else; Fleet resumes a dispatched Task for its next message or amendment. Not a failure. |
+| Stalled or other NeedsAttention | Explain the recorded condition. Check the runtime before proposing recovery. |
 | Unknown or disconnected runtime | State is unknown. Do not create a replacement blindly. |
 | Concluded with a result | A worker recorded a claim. Check the result and artifact evidence. |
 | Releasing | Deletion is waiting for session cleanup; do not bypass the finalizer. |
@@ -47,9 +50,9 @@ engine's manager: changes reach you as Fleet messages in your inbox.
 resolved values stay in private launch snapshots, and current TaskConfig or
 EnvProvider specs may differ from it.
 
-Read `fleet send --help` and `fleet declare --help`. `fleet send NAME "MESSAGE"`
-queues a message; success means queued, not delivered. Inspect `status.inbox`,
-`status.deliveries` and delivery conditions for receipts or failure. The controller
+`fleet send NAME "MESSAGE"` queues a message; success means queued, not
+delivered. Inspect `status.inbox`, `status.deliveries` and delivery conditions
+for receipts or failure. The controller
 delivers oldest first to ready sessions, including retained Concluded sessions.
 A missing concluded worker raises WorkerGone; it is never respawned for delivery.
 Do not replace the inbox through apply or edit status directly.
@@ -132,8 +135,10 @@ own Task, without sensitive prompt text:
 `fleet declare vega --json '{"kind":"Note","text":"steered NAME: outcome"}'`.
 Never mutate Task status or keep the record in agent memory.
 
-Retained Concluded sessions may receive follow-up coordination, but their immutable
-result is not replaced. A new substantive request requires a new Task.
+`fleet send` to a retained Concluded session is conversation: it neither
+re-opens the Task nor replaces its result. A follow-up on the same deliverable
+is a `fleet amend` (see task-intake), which re-opens it until the worker records
+a result for the new generation. A new substantive request requires a new Task.
 
 `fleet declare NAME --change-request URL` ensures a ChangeRequest mirror and
 appends a worker declaration. Inspect `status.declared`, `status.forge` and
@@ -151,9 +156,10 @@ or mirrors. Do not declare or conclude another worker's work on its behalf.
 
 ## Worker completion
 
-Read `fleet result --help` and the Task's brief receipt. A worker records its own
-answer once, with the generation in `status.brief.generation`, even if a later
-dispatch or forge edit advanced `metadata.generation`:
+A worker records its own answer for the generation in `status.brief.generation`.
+A delivered amendment advances it; a dispatch or forge edit advances only
+`metadata.generation`. Fleet refuses a result while an amendment waits to be
+delivered:
 
 ```text
 fleet result NAME --generation 1 --outcome shipped --summary "Verified result"
