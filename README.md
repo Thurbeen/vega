@@ -13,19 +13,19 @@ Its rules are in [workspace/AGENTS.md](workspace/AGENTS.md).
 
 | Targets | |
 | --- | --- |
-| Fleet | v2.7.3, resource API `fleet/v1alpha1`, native config schema 1 |
+| Fleet | v2.10.0 or later, checked against v2.22.0; resource API `fleet/v1alpha1`, native config schema 1 |
 | Initial resources | Task `vega` only; TaskConfig, EnvProvider and ChangeRequest are optional |
 | Not included | Engine install, harness login, engine code or controllers |
 
 ## Install and run
 
-1. Install a compatible Fleet binary, Thurbox, `jq` and an authenticated
-   supported harness. The starter defaults to `codex`; choose another harness
-   before the initial Task is created, since its spec is then immutable except
-   for `dispatch` and `forge`.
-2. Run `fleet init`, then `fleet up`. See their help for config overrides and
-   platform-specific discovery, and `fleet version --json` for the installed
-   capabilities.
+1. Install Fleet v2.10.0 or later, Thurbox, `jq` and an authenticated
+   supported harness.
+2. Run `fleet init --harness NAME`, then `fleet up`. The harness defaults to
+   `codex` and is fixed once `fleet up` creates the VEGA Task; workers get the
+   same one unless a user or repository asks for another. See their help for
+   config overrides and platform-specific discovery, and `fleet version --json`
+   for the installed capabilities.
 
 The released Fleet binary pins this starter at an exact source commit, so setup
 needs neither Git nor a Fleet source checkout. `fleet init` / `fleet up` need
@@ -76,13 +76,14 @@ flowchart LR
   template configures neither, and Fleet does not merge changes. Creating a Task
   grants no permission to publish.
 - **Coordination.** `fleet send TASK "MESSAGE"` queues inbox delivery; check
-  its receipts, since queueing is not delivery. Direct prompts to an existing
-  session follow
+  its receipts, since queueing is not delivery. A follow-up on the same
+  deliverable is `fleet amend TASK --text TEXT`, which keeps the worker's
+  session and branch. Direct prompts to an existing session follow
   [task-status](workspace/.agents/skills/task-status/SKILL.md).
 
-The full engine contract is in Fleet v2.7.3's
-[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.7.3/docs/configuration).
+The full engine contract is in Fleet v2.22.0's
+[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.22.0/docs/resources)
+and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.22.0/docs/configuration).
 
 ## Files
 
@@ -122,8 +123,8 @@ the engine's conflict report. Details are in [BOOTSTRAP.md](BOOTSTRAP.md).
 
 ## Verify source content
 
-Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet
-v2.7.3-compatible executable; there are no Python package dependencies. Set
+Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet v2.10.0 or
+later executable; there are no Python package dependencies. Set
 `FLEET_BIN` to the executable's absolute path, then run:
 
 ```text
@@ -143,9 +144,9 @@ They also check:
 - repository workspaces through Fleet's Thurbox adapter with a recording
   `thurbox-cli` stand-in (POSIX only), including the unmapped-URL wait and the
   mapping check;
-- worker reports into VEGA's inbox, the status digest, labels, the re-hydrate
-  protocol, the word budget of always-read guidance and the ban on blocking
-  waits.
+- worker reports into VEGA's inbox, follow-up amendments, the status digest,
+  labels, the re-hydrate protocol, the word budget of always-read guidance and
+  the ban on blocking waits.
 
 They do not log in to a harness, start live Thurbox sessions or worktrees,
 validate native Windows startup, or prove the engine's concurrent `init`/`up`
@@ -157,5 +158,5 @@ the local gates are required before publishing; see [.publish.yaml](.publish.yam
 
 MIT, copyright 2026 Thurbeen, retained from Fleet's public MIT license. The forge
 worker rules come from Fleet v2.1.0's bundled VEGA workspace; other guidance is
-informed by Fleet v2.7.3's public contracts and checked against its CLI. Legacy
+informed by Fleet v2.22.0's public contracts and checked against its CLI. Legacy
 Python queue skills and operator configuration were not copied.
