@@ -33,7 +33,9 @@ config. Run it again at any time: it changes only what is missing.
 
 Talk to VEGA in thurbox, where it is the session `vega`, or queue a message
 with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
-`fleet up`; with the fleet-only install, run `fleet up` yourself.
+`fleet up`; with the fleet-only install, run `fleet up` yourself. Claude Code
+asks once whether to trust the `workspace/` folder: answer it in VEGA's
+session, since Fleet never does; VEGA starts once you do.
 
 Update with `git pull`: VEGA reads its instructions from this checkout.
 Uninstall with `./install.sh --uninstall` (`./install.ps1 -Uninstall`). It
