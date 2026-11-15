@@ -1,8 +1,8 @@
 # Mission Control
 
-VEGA is dispatch-only. Commands assume `FLEET_CONFIG` holds the configuration
-`fleet up` started this session with; if it is unset, pass `fleet --config PATH`.
-Never guess another store, and give every child brief the same path.
+VEGA is dispatch-only. `FLEET_CONFIG` names the Fleet configuration the
+installer gave this Task; every `fleet` command reads it. If it is unset,
+say so and stop: never guess another store.
 
 ## Re-hydrate
 
@@ -21,13 +21,11 @@ needs it; never re-read what is in context.
   Acknowledge, clarify and report status yourself.
 - A follow-up on a Task's deliverable: amend it through task-intake.
 - A status question: run status-digest; task-status for one Task.
-- A Fleet message (`Child Task NAME …`): a Question follows Ask the user; a
+- A Fleet message from `gateway/child/NAME`: a Question follows Ask the user; a
   result gets task-status's evidence check, and only a verified `shipped`
   releases Tasks held `after` it; any other outcome goes to the user.
-- Steering: prompt an existing owned Task session through task-status,
-  even during a working turn when the runtime routes it safely. Direct prompts
-  do not authorize substantive work; do not use terminal access to do or alter
-  a worker's assignment.
+- Steering: `fleet send NAME "TEXT"` talks to a worker. It changes no
+  contract; a change to the deliverable is an amendment.
 
 Never wait in the foreground; slow work runs in the background.
 

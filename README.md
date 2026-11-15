@@ -1,162 +1,108 @@
 # VEGA
 
-VEGA is the generic Mission Control workspace bundled with Fleet v2's engine:
-instructions, prompts, three agent skills, a minimal runtime configuration and
-one initial Task. Fleet is the engine; VEGA is editable content running as an
-ordinary Task.
+VEGA is a Mission Control for [Fleet](https://github.com/Thurbeen/thurbox/tree/main/docs/fleet):
+one Fleet Task whose agent only dispatches work to worker Tasks, follows them
+and reports back. It is instructions, prompts and three agent skills; Fleet
+runs it like any other Task.
 
-VEGA is dispatch-only. Every substantive deliverable, from design and research
-through implementation, review, writing and operations, runs in a bounded worker
-Task with its own workspace, however short or read-only. VEGA only routes and
-steers work, resolves dependencies, checks recorded evidence and reports state.
-Its rules are in [workspace/AGENTS.md](workspace/AGENTS.md).
+## Install
 
-| Targets | |
-| --- | --- |
-| Fleet | v2.10.0 or later, checked against v2.23.1; resource API `fleet/v1alpha1`, native config schema 1 |
-| Initial resources | Task `vega` only; TaskConfig, EnvProvider and ChangeRequest are optional |
-| Not included | Engine install, harness login, engine code or controllers |
+You need Fleet v3 (with thurbox, or the fleet-only install), `jq`, and a
+coding agent on PATH that you have logged in to. Then:
 
-## Install and run
-
-1. Install Fleet v2.10.0 or later, Thurbox, `jq` and an authenticated
-   supported harness.
-2. Run `fleet init --harness NAME`, then `fleet up`. The harness defaults to
-   `codex` and is fixed once `fleet up` creates the VEGA Task; workers get the
-   same one unless a user or repository asks for another. See their help for
-   config overrides and platform-specific discovery, and `fleet version --json`
-   for the installed capabilities.
-
-The released Fleet binary pins this starter at an exact source commit, so setup
-needs neither Git nor a Fleet source checkout. `fleet init` / `fleet up` need
-Fleet's bootstrap implementation; the Python v1 CLI does not support them.
-
-```mermaid
-flowchart LR
-  Release[Installed Fleet with pinned starter] --> Init[fleet init]
-  Init --> Config[Local config and VEGA workspace]
-  Config --> Up[fleet up]
-  Up --> Task[Start or reconnect VEGA Task]
-  Up --> Loop[Continuous resource reconciliation]
+```sh
+git clone https://github.com/Thurbeen/vega
+cd vega
+./install.sh
 ```
 
-`fleet up` owns reconciliation whether VEGA is busy or idle, reuses the persisted
-Task and session on restart, and keeps an ambiguous runtime response unknown
-instead of starting another Mission Control. These are engine guarantees; the
-content cannot implement process recovery. All commands and worker briefs
-address the same store via `--config PATH` or inherited `FLEET_CONFIG`; never
-initialize a second store.
+On Windows, in PowerShell 7: `./install.ps1`.
+
+The installer:
+
+1. checks that `fleet` is Fleet v3 and that `jq` is on PATH;
+2. runs `fleet init` when there is no Fleet config yet; an existing one is kept;
+3. picks the agent: `--harness NAME`, else the first one `fleet doctor` finds
+   on PATH;
+4. adds `[forge.hosts]` for `github.com` and `gitlab.com` when the config has
+   none and `gh` or `glab` is on PATH, so workers can declare their changes;
+5. applies the Task `vega`, which works in this checkout's `workspace/`.
+
+It installs into `--config PATH`, else `FLEET_CONFIG`, else Fleet's per-user
+config. Run it again at any time: it changes only what is missing.
+
+Talk to VEGA in thurbox, where it is the session `vega`, or queue a message
+with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
+`fleet up`; with the fleet-only install, run `fleet up` yourself. Claude Code
+asks once whether to trust the `workspace/` folder: answer it in VEGA's
+session, since Fleet never does; VEGA starts once you do.
+
+Update with `git pull`: VEGA reads its instructions from this checkout.
+Uninstall with `./install.sh --uninstall` (`./install.ps1 -Uninstall`). It
+deletes the Task `vega`; its workers and this checkout stay. To change the
+agent, uninstall, then install with another `--harness`.
 
 ## How it works
 
-```mermaid
-flowchart LR
-  User -->|request| VEGA
-  VEGA -->|apply Task with parent labels| Fleet
-  Fleet -->|spawn and brief| Worker
-  Worker -->|declare Question, change, result| Fleet
-  Fleet -->|inbox message when idle| VEGA
-  VEGA -->|Dispatched / Done / Needs you| User
+```text
+you ──request──▶ VEGA ──fleet apply (parent labels)──▶ Fleet ──▶ worker Task
+ ▲                ▲                                       │       (own worktree)
+ └──reply─────────┴──── Questions, changes, results ◀─────┘
 ```
 
-- **Background work.** VEGA never waits in the foreground. Workers carry
-  `gateway.fleet.dev/parent` labels, so Fleet relays their Questions, changes and
-  results into VEGA's inbox.
-- **Fleet as memory.** Order, limits, pending decisions and the request are
-  `vega.fleet.dev/*` labels; held work has `dispatch` false. Agent memory holds
-  user preferences only, so VEGA's context is disposable and rebuilt from
-  the status digest. See [mission-control.md](workspace/prompts/mission-control.md).
-- **Workspaces.** Worker Tasks use `spec.workspace.repositories`; the runtime
-  creates the worktrees from source checkouts mapped in `runtime.repositories`,
-  and by default deletes them, their branch and unpushed commits with the
-  session. See [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
-- **Forge work.** Authorized workers open drafts, declare them with `fleet declare TASK
-  --change-request URL` and end every post with `<!-- fleet:worker <task uid> -->`. Forge following needs an
-  operator-configured `[forge.hosts]` entry and an authenticated forge CLI; the
-  template configures neither, and Fleet does not merge changes. Creating a Task
-  grants no permission to publish.
-- **Coordination.** `fleet send TASK "MESSAGE"` queues inbox delivery; check
-  its receipts, since queueing is not delivery. A follow-up on the same
-  deliverable is `fleet amend TASK --text TEXT`, which keeps the worker's
-  session and branch. Direct prompts to an existing session follow
-  [task-status](workspace/.agents/skills/task-status/SKILL.md).
-
-The full engine contract is in Fleet v2.23.1's
-[resource contracts](https://github.com/Thurbeen/fleet/tree/v2.23.1/docs/resources)
-and [configuration contracts](https://github.com/Thurbeen/fleet/tree/v2.23.1/docs/configuration).
+- **Dispatch-only.** Every deliverable, however small, runs in a worker Task
+  with its own workspace. VEGA routes, steers, checks recorded evidence and
+  reports. Its rules are in [workspace/AGENTS.md](workspace/AGENTS.md).
+- **Never waits.** Workers carry `gateway.fleet.dev/parent` labels, so Fleet
+  relays their Questions, declared changes and results into VEGA's inbox.
+- **Fleet is the memory.** Order, limits and pending decisions are
+  `vega.fleet.dev/*` labels on the Tasks; held work has `dispatch` false. A
+  cleared or restarted VEGA rebuilds its state from the
+  [status digest](workspace/.agents/skills/status-digest/SKILL.md).
+- **Workspaces are URLs.** A worker names `git+https://…` repositories; the
+  runtime cuts a worktree on the branch `<task name>.<task uid>` from the URL's
+  `#ref` or the remote's default branch. Deleting the Task keeps the branch and
+  commits uncommitted work to `refs/fleet/preserved/…`. See
+  [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
+- **Forge work.** An authorized worker opens a draft, declares it with
+  `fleet declare TASK --change-request URL` and ends every post with
+  `<!-- fleet:worker <task uid> -->`. Fleet follows the change and never
+  merges. A Task grants no permission to publish.
 
 ## Files
 
-[starter.toml](starter.toml) is the schema-1 allowlist; only its listed assets
-ship. Its `content_version` versions the content, not the Fleet engine, and does
-not replace a source commit. Never package this checkout, its Git directory,
-tests, local configuration or other files. [BOOTSTRAP.md](BOOTSTRAP.md) is the
-rendering and update contract.
-
-| Source | Installed purpose |
+| Path | What it is |
 | --- | --- |
-| `workspace/AGENTS.md` | VEGA's workspace instructions |
-| `workspace/prompts/mission-control.md` | Startup and coordination prompt |
-| `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a Task |
-| `workspace/.agents/skills/task-status/SKILL.md` | Read Task state/evidence and coordinate with an existing session |
-| `workspace/.agents/skills/status-digest/SKILL.md` | One line per Task, rebuilt from Fleet, and the labels that hold order and limits |
-| `config/fleet.toml` | Working Thurbox runtime configuration |
-| `tasks/vega.json` | JSON array containing the initial VEGA Task template |
-| `LICENSE` | MIT license and retained attribution |
+| `install.sh`, `install.ps1` | Install or uninstall VEGA |
+| `tasks/vega.json` | The Task the installer applies, once it sets the agent, workspace and config |
+| `workspace/AGENTS.md` | VEGA's rules |
+| `workspace/prompts/mission-control.md` | Start-up, each turn, replies and re-hydration |
+| `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a worker Task |
+| `workspace/.agents/skills/task-status/SKILL.md` | One Task's state, steering and result checks |
+| `workspace/.agents/skills/status-digest/SKILL.md` | One line per Task, and the labels that hold order and limits |
 
-The skills are standard `SKILL.md` packages: from a checkout,
-`npx skills add . --list` discovers them. Installing skills alone does not create
-a Fleet config, workspace or VEGA Task.
+The skills are standard `SKILL.md` packages; `npx skills add . --list` lists
+them. Installing the skills alone creates no Task.
 
-## Customize and update
+Keep personal additions in `workspace/CUSTOM.md` or
+`workspace/private/INSTRUCTIONS.md`; git ignores both. Never commit
+credentials, Fleet stores or personal config here.
 
-Keep personal additions in `CUSTOM.md` or `private/INSTRUCTIONS.md` inside the
-installed workspace; neither ships. Never commit them, credentials, runtime
-stores or personal Fleet config here, and add equivalent ignore rules if your
-installed workspace lives in another Git repository. Ignore rules do not protect
-secrets from an agent or another filesystem user.
+## Tests
 
-You may edit the generated instructions. Updates preserve your edits and private
-files and report changed managed files as conflicts; runtime configuration is
-user-owned after first creation. Save customizations before updating and check
-the engine's conflict report. Details are in [BOOTSTRAP.md](BOOTSTRAP.md).
+Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet v3 binary:
 
-## Verify source content
-
-Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet v2.10.0 or
-later executable; there are no Python package dependencies. Set
-`FLEET_BIN` to the executable's absolute path, then run:
-
-```text
-uv run --no-project python -m unittest discover -s tests -v
+```sh
+FLEET_BIN=/path/to/fleet uv run --no-project python -m unittest discover -s tests -v
 prek run --all-files
 ```
 
-Using the real Fleet CLI with FakeRuntime, the tests install from the
-allowlist into a path containing spaces, parse the unchanged production config,
-and apply, brief and repeatedly reconcile VEGA without duplicating its identity.
-They also check:
+The tests install VEGA with both installers into a sandboxed HOME and a store
+on Fleet's fake runtime, so no agent starts. The PowerShell tests run when
+`pwsh` is on PATH. Then they run the commands the guidance ships: workers
+report into VEGA's inbox, the digest rebuilds state, follow-ups amend, and
+every example resource applies. They cannot prove a model obeys the prose.
 
-- Windows relative-path separators against the manifest;
-- the dispatch-only boundary and delivery contract in every installed prompt;
-- the forge worker rules, the optional resource examples, forge mutation, inbox
-  delivery, declarations and result generation;
-- repository workspaces through Fleet's Thurbox adapter with a recording
-  `thurbox-cli` stand-in (POSIX only), including the unmapped-URL wait and the
-  mapping check;
-- worker reports into VEGA's inbox, follow-up amendments, the status digest,
-  labels, the re-hydrate protocol, the word budget of always-read guidance and
-  the ban on blocking waits.
+## License
 
-They do not log in to a harness, start live Thurbox sessions or worktrees,
-validate native Windows startup, or prove the engine's concurrent `init`/`up`
-and update implementation; the engine repository owns those. Content checks
-cannot prove a language model always obeys prose. There is no CI pipeline, so
-the local gates are required before publishing; see [.publish.yaml](.publish.yaml).
-
-## License and provenance
-
-MIT, copyright 2026 Thurbeen, retained from Fleet's public MIT license. The forge
-worker rules come from Fleet v2.1.0's bundled VEGA workspace; other guidance is
-informed by Fleet v2.23.1's public contracts and checked against its CLI. Legacy
-Python queue skills and operator configuration were not copied.
+MIT, copyright 2026 Thurbeen.

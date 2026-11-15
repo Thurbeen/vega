@@ -3,4 +3,4 @@ vega-test-*/
 .private/
 workspace/private/
 workspace/CUSTOM.md
-config/*.local.toml
+workspace/dispatch/

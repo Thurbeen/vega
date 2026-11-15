@@ -4,11 +4,10 @@ base: main
 review:
   rules:
     - AGENTS.md
-    - BOOTSTRAP.md
 gate:
-  - name: starter
+  - name: vega
     run: uv run --no-project python -m unittest discover -s tests -v
-    instructions: Set FLEET_BIN to an absolute path of a Fleet v2.10.0 or later executable and have jq installed; v2.9 and older lack fleet amend, v2.5 and older lack the parent-label relay into the parent Task's inbox, and v2.2.0 and older lack the repositories workspace or its hot reload. The test must use the real binary with FakeRuntime or its recording thurbox-cli stand-in, never a live harness session.
+    instructions: Set FLEET_BIN to an absolute path of a Fleet v3 executable, with jq on PATH; put pwsh on PATH to cover install.ps1. The tests use the real binary and the fake runtime, never a live harness session.
   - name: hooks
     run: prek run --all-files
 ci:

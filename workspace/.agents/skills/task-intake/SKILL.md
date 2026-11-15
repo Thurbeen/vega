@@ -8,18 +8,11 @@ license: MIT
 
 VEGA is dispatch-only: every substantive requested deliverable belongs to a
 worker Task, however short, read-only or urgent. A request without a repository
-still gets one owner, a concrete result and an isolated workspace, which is a
-`dir` only when the user explicitly asks for it. Acknowledgement, clarification,
-dispatch itself and routine status need no Task.
+still gets one owner, a concrete result and a workspace of its own.
+Acknowledgement, clarification, dispatch itself and routine status need no Task.
 
-This skill needs an engine that reports `version` 2.10.0 or later; check
-`fleet version --json` once per session and tell the user when it must be
-upgraded. Before 2.10.0 there is no `fleet amend`; before 2.6.0 the parent
-labels below relay nothing, so report results only when asked. Commands
-assume `FLEET_CONFIG` holds Mission Control's configuration; use
-`fleet --config PATH` when inheritance is uncertain, never a guessed store, and
-require that exact path for every Fleet operation in each child brief. Read
-`fleet --help` or a subcommand's help only when a command is refused.
+Every `fleet` command reads `FLEET_CONFIG`. Read `fleet --help` or a
+subcommand's help only when a command is refused.
 
 ## Prepare
 
@@ -44,71 +37,51 @@ Record the user's ordering and limits on the Tasks, not in your memory:
 
 status-digest shows these labels and how to change them.
 
-Give each Task its own workspace, in exactly one of two forms:
+## Workspace
 
-- `{"repositories": [{"name", "url", "ref"}]}` for every Task. The runtime
-  owns the checkout: it materializes the repositories for this Task alone, on a
-  branch it names, and cleans them up when the Task's session is deleted. Never
-  clone, add a worktree or prepare a checkout yourself, and never name a branch
-  in the spec; Fleet has no branch, base, worktree or cleanup field.
-  - Use the exact URL mapped in the Mission Control config's
-    `runtime.repositories`, for example the canonical
-    `https://github.com/OWNER/REPO`; Fleet matches it byte for byte, with no
-    `.git` or SSH normalization. An unmapped URL leaves the Task Pending with
-    `NeedsAttention`/`RepositoryUnmapped`, without spending a spawn attempt, so
-    add the mapping yourself, never a checkout or a directory in its place:
-    1. Find an existing source checkout on the target host whose `origin` is that
-       URL (`git -C PATH remote get-url origin`) and which has no branch named
-       after `runtime.keyPrefix`. If there is none, several, or the mapping needs
-       anything else, ask the user and wait.
-    2. Write a candidate copy of the config that adds
-       `"URL" = "/absolute/source/path"` under `[runtime.repositories]` and
-       changes nothing else. Check it against a new empty scratch directory
-       outside Fleet's data, which opens the runtime the way `fleet up` does
-       without touching the live store:
-       `fleet --config CANDIDATE --data-dir EMPTY_DIR reconcile --max-passes 1 --json`.
-       Only when it exits 0, keep the old config as a backup and put the
-       candidate in its place; then remove the scratch directory. A
-       `fleet list` passing proves nothing: it does not open the runtime.
-    3. A running `fleet up` re-reads `runtime.repositories` before each sweep,
-       so the mapping applies without a restart and a waiting Task then spawns.
-       An invalid edit leaves the last valid mapping in force. Other config
-       settings need a restart: leave those to the user, and never stop the
-       engine yourself.
-  - `ref` is optional and opaque to Fleet. Thurbox uses it as the base of a
-    worktree created in the mapped source checkout, and it does not fetch, so
-    name a remote-tracking ref such as `origin/main` and have the worker confirm
-    its base against the forge before relying on it.
-  - The first repository is the primary. With one repository the worker starts
-    in its worktree; with several, Thurbox starts it in a directory holding one
-    entry per repository, named after each source checkout's directory. Say in
-    the brief which repository each part of the work belongs to.
-  - The runtime's cleanup applies when the Task is deleted: with Thurbox's
-    default `delete` it removes its worktrees, its branch and any unpushed
-    commits. Brief workers to push, declare or record anything that must
-    survive before they record their result.
-- `{"dir": PATH}` only when the user explicitly asks for that exception, for
-  example for work that has no repository: an existing absolute directory on the
-  target host, outside Fleet's data directory and outside this workspace.
-  Fleet neither creates nor isolates it, so never share one between live Tasks.
-  Put only the Task's inputs and outputs in it; the worker makes any checkout it
-  needs. Without that request, ask the user for a repository or a `dir`
-  exception.
-  Existing `dir` Tasks finish in place; their specs are immutable, so never
-  rewrite or move them.
+`spec.workspace` is a list of URLs. The runtime makes one directory per URL
+before the session starts; the worker starts in the first.
+
+```text
+git+https://forge.example/acme/app.git        repository, default branch
+  └─ branch <task name>.<task uid>            cut by the runtime, never by you
+       └─ worktree for this Task alone        the worker works and commits here
+```
+
+- A repository is a `git+` URL: `git+https://…`, `git+ssh://…` or
+  `git+file:///abs/checkout`. The base is the URL's `#ref`, else the remote's
+  default branch. `?branch=NAME` names the branch, only when the user asks for
+  one. Never clone, add a worktree or prepare a checkout yourself.
+- Several URLs give one directory each under the same Task. Say in the brief
+  which repository each part of the work belongs to.
+- Work with no repository: ask the user for a repository, or for an existing
+  absolute directory, written `file:///abs/dir`. Fleet uses that directory as it
+  is and isolates nothing, so never give one to two live Tasks.
+- Deleting the Task removes its worktree. The branch stays, and uncommitted
+  work goes to `refs/fleet/preserved/<key>/<name>` in the repository. Brief
+  workers to push, declare or record anything others need before they record
+  their result.
+
+A Task waiting with `WorkspaceUnsupported` named a URL its runtime cannot make:
+fix the URL in a new Task.
+
+## Manifest
 
 Write the manifest with a JSON serializer to `dispatch/NAME.json` in this
 workspace, replacing every example value, and never echo the brief in a reply.
-The file is only input to `fleet apply`; Fleet keeps the Task, so the file is
-safe to delete. The two `gateway.fleet.dev/parent` labels make Fleet relay the
-worker's Questions, declared changes and result into VEGA's own inbox, which is
-how Mission Control hears back without waiting. Set `harness` to Task
-`vega`'s `spec.harness` unless the user or the repository asks for another.
-Replace `VEGA_UID` with:
+The file is only input to `fleet apply`, which reads JSON; Fleet keeps the
+Task, so the file is safe to delete.
 
-```sh
-fleet get task vega | jq -r .metadata.uid
-```
+- The two `gateway.fleet.dev/parent` labels make Fleet relay the worker's
+  Questions, declared changes and result into VEGA's own inbox, which is how
+  Mission Control hears back without waiting. `VEGA_UID` is
+  `fleet get task vega | jq -r .metadata.uid`.
+- `harness` is Task `vega`'s `spec.harness` unless the user or the repository
+  asks for another.
+- `env.FLEET_CONFIG` is the value of your own `FLEET_CONFIG`, so the worker's
+  `fleet` commands reach this store.
+- Omit `host` to run on this machine. Another place is `<runtime>/<place>`,
+  from `fleet runtime places`, only when the user asks for it.
 
 ```json
 {
@@ -125,22 +98,19 @@ fleet get task vega | jq -r .metadata.uid
   },
   "spec": {
     "harness": "codex",
-    "host": "local",
     "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
-    "workspace": {"repositories": [
-      {"name": "app", "url": "https://forge.example/acme/app", "ref": "origin/main"}
-    ]},
+    "workspace": ["git+https://forge.example/acme/app.git"],
+    "env": {"FLEET_CONFIG": "/path/from/your/FLEET_CONFIG"},
     "dispatch": false
   }
 }
 ```
 
-Every brief names the exact Fleet config path, the concrete result, the checks,
-the limits, and how to ask: `fleet declare NAME --json
-'{"kind":"Question","id":"q1","text":"..."}'`, then wait for the answer in the
-inbox. For a reported issue, the brief requires a failing end-to-end reproducer
-first, and an implementation brief requires the repository's tests and
-publishing gate.
+Every brief names the concrete result, the checks, the limits, and how to ask:
+`fleet declare NAME --json '{"kind":"Question","id":"q1","text":"..."}'`, then
+wait for the answer in the inbox. For a reported issue, the brief requires a
+failing end-to-end reproducer first, and an implementation brief requires the
+repository's tests and publishing gate.
 
 ## Forge worker brief
 
@@ -151,6 +121,10 @@ on its own line, the uid from `fleet get task TASK`. Name the repository's
 publishing skill, or the installed publish skill if it has none. A Task does not
 authorize publication, merging or deployment, and workers do not merge.
 
+Fleet follows a change only on a forge listed under `[forge.hosts]` in the
+config; it refuses to declare any other. Report that to the user; never edit
+the config yourself.
+
 A pull or merge request deliverable is done only once the real change URL is
 declared and the base, checks, CI and review required by the user or repository
 for that delivery stage pass; a local commit or a blocked required gate is not
@@ -160,12 +134,11 @@ publication on Tasks whose requested result does not include it. Declaring
 concludes nothing; feedback reaches the worker's inbox, and Fleet follows only
 declared changes.
 
-## Optional execution defaults
+## Shared defaults
 
-Keep the simple Task above unless reusable defaults are useful. TaskConfig and
-EnvProvider are passive JSON resources, applied into the same store, separate
-from native TOML. There is no `[taskConfig]` or `[envProvider]` TOML section.
-Apply a provider, then its config, then the Task, for example:
+A TaskConfig holds defaults several Tasks share, and an EnvProvider supplies
+environment values. Both are JSON resources applied like a Task: the provider,
+then the config, then the Task.
 
 ```json
 {
@@ -189,45 +162,24 @@ Apply a provider, then its config, then the Task, for example:
 }
 ```
 
-```json
-{
-  "apiVersion": "fleet/v1alpha1",
-  "kind": "Task",
-  "metadata": {"name": "configured-review"},
-  "spec": {
-    "configRef": {"name": "reviewer"},
-    "env": {"PROJECT_MODE": "focused"},
-    "brief": "Review the repository instructions and report findings. Do not publish. Record your result with the delivered brief generation.",
-    "workspace": {"repositories": [
-      {"name": "app", "url": "https://forge.example/acme/app", "ref": "origin/main"}
-    ]},
-    "dispatch": false
-  }
-}
-```
-
-TaskConfig supports harness, host, model, ordered `envFrom` and string `env`;
-explicit Task fields override it, and model selection needs a matching
-`runtime.modelEnv` mapping. EnvProvider supports string `data` and ordered file
-or command `sources`, read on the manager. Resolution freezes privately before
-launch, so later edits affect only future launches. Literal values are visible
-in resource reads and snapshots are plaintext: keep credentials in external
-private sources. Read Fleet's TaskConfig and EnvProvider resource documentation
-for sources, precedence and limits before writing anything beyond these examples.
+A Task names it with `"configRef": {"name": "reviewer"}`; its own fields win.
+Fleet freezes the resolved values before the first launch, so a later edit
+affects only later Tasks. Literal values are readable by anyone who reads the
+store: keep credentials in the user's own sources, and read Fleet's TaskConfig
+and EnvProvider documentation before going beyond these examples.
 
 ## Apply and dispatch
 
 1. Check `fleet get task NAME` first. If it exists, inspect it; never reuse a
-   name for a different request. A failed read is not evidence that the Task is
-   absent unless it explicitly reports not found.
-2. Run `fleet apply -f dispatch/NAME.json --json` to create the suspended Task.
+   name for a different request. Only exit code 3 means not found.
+2. Run `fleet apply -f dispatch/NAME.json --create-only` to create the
+   suspended Task.
 3. When its prerequisites are met, the work is authorized and it is not held,
-   set only `spec.dispatch` to `true` in that file and apply it again.
+   set only `spec.dispatch` to `true` in that file and run
+   `fleet apply -f dispatch/NAME.json`.
 4. Reply at once with the `Dispatched:` line. Never wait for the spawn, poll
    `fleet list` or read the result in the same turn: the running `fleet up`
    reconciles it and Fleet delivers the worker's messages into your session.
-   Run `fleet reconcile` only when the user asks for it while `fleet up` is
-   down, in the harness's background facility.
 
 If the engine, authentication, resources or another prerequisite blocks dispatch,
 report that exact blocker and create a bounded recovery Task when possible. If no
@@ -236,7 +188,7 @@ inline or claim that it started.
 
 ## Follow-ups and overlapping work
 
-The digest's `repo:` fields show which Tasks share a repository.
+The digest's `ws:` fields show which Tasks share a repository.
 
 - More context, an added ask or constraint, or a correction for an existing
   Task's deliverable is an amendment, not a new Task:
@@ -256,15 +208,15 @@ The digest's `repo:` fields show which Tasks share a repository.
   rather than assume the amend landed. Update the Task's `limits` label when
   the user changes them.
 - Amendments only add. A wrong brief, or another deliverable, repository,
-  harness or host, needs a new Task. `fleet send` is conversation: it changes
+  harness or place, needs a new Task. `fleet send` is conversation: it changes
   no contract and re-opens nothing.
 - Live Tasks on one repository get separate worktrees and branches but can
   conflict when merged. When their work overlaps, hold the later one `after`
   the earlier, or ask the user; otherwise run them in parallel.
 
-Only `dispatch`, `forge` and labels change through `fleet apply` on an existing
-Task. Do not supply status, uid or generation on create. Setting
-dispatch false does not stop an already spawned session. Do not delete another
-worker's Task as a retry strategy or treat an ambiguous runtime probe as
-permission to spawn a replacement. A held Task that never spawned may be deleted
-and recreated when its brief must change.
+Only `dispatch`, `forge` and labels change on an existing Task. Do not supply
+status, uid or generation on create. Setting dispatch false does not stop an
+already spawned session. Do not delete another worker's Task as a retry
+strategy or treat an unknown runtime answer as permission to spawn a
+replacement. A held Task that never spawned may be deleted and recreated when
+its brief must change.
