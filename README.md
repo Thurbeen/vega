@@ -59,9 +59,11 @@ you ──request──▶ VEGA ──fleet apply (parent labels)──▶ Fleet
   `vega.fleet.dev/*` labels on the Tasks; held work has `dispatch` false. A
   cleared or restarted VEGA rebuilds its state from the
   [status digest](workspace/.agents/skills/status-digest/SKILL.md).
-- **Workspaces are URLs.** A worker names `git+https://…` repositories; the
-  runtime cuts a worktree on the branch `<task name>.<task uid>` from the URL's
-  `#ref` or the remote's default branch. Deleting the Task keeps the branch and
+- **Workspaces are URLs.** A worker names a repository by its local checkout,
+  `git+file:///…`, when the private instructions map one, else by
+  `git+https://…`; the runtime cuts a worktree on the branch
+  `<task name>.<task uid>` from the URL's `#ref` or the remote's freshly fetched
+  default branch. Deleting the Task keeps the branch and
   commits uncommitted work to `refs/fleet/preserved/…`. See
   [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
 - **Forge work.** An authorized worker opens a draft, declares it with
