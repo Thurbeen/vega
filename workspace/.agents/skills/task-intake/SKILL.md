@@ -21,9 +21,11 @@ and the checks. Read the status digest first: a follow-up on a live or
 concluded Task's deliverable is an amendment, and another Task may already work
 in the same repository (see Follow-ups and overlapping work). Read only the
 repository instructions needed to brief the worker. Choose a unique lowercase
-DNS-like Task name that the Board has not seen either: its milestones are keyed
-by name, so `fleet event list --correlation NAME --limit 1 --json` must print
-`[]`.
+DNS-like Task name that the Board has not seen either, since milestones are
+keyed by name: pick another when
+`fleet event list --correlation NAME --after N --limit 1 --json` lists an event,
+with N 0. An `expired` answer means listing again with N one below its
+`oldest`; `Board/shared not found` is no conflict, but report it.
 
 Record the user's ordering and limits on the Tasks, not in your memory:
 

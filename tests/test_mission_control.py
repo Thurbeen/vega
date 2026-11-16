@@ -330,10 +330,22 @@ class MissionControl(unittest.TestCase):
 
     def test_a_task_name_the_board_holds_is_not_reused(self):
         prepare = ' '.join(section(text('.agents/skills/task-intake/SKILL.md'), 'Prepare').split())
-        check = re.search(r'`(fleet event list --correlation NAME --limit 1 --json)` must print `\[\]`', prepare).group(1)
-        self.assertEqual(self.sh(check, NAME='fix-login').strip(), '[]')
+        check = re.search(r'`(fleet event list --correlation NAME --after N --limit 1 --json)`', prepare).group(1)
+        for required in ['lists an event', 'expired', '`oldest`', 'Board/shared not found', 'no conflict']:
+            self.assertIn(required, prepare)
+        self.assertEqual(self.sh(check, NAME='fix-login', N='0').strip(), '[]')
         self.publish_milestone('started', '{}')
-        self.assertIn('task.started', self.sh(check, NAME='fix-login'))
+        self.assertIn('task.started', self.sh(check, NAME='fix-login', N='0'))
+        self.apply({'apiVersion': 'fleet/v1alpha1', 'kind': 'Board', 'metadata': {'name': 'shared'},
+                    'spec': {'retention': {'maxCount': 1}}})
+        self.publish_milestone('started', '{}', name='fix-logout')
+        self.publish_milestone('result', '{}', name='fix-logout')
+        expired = json.loads(self.sh_status(check, NAME='fix-signup', N='0').stdout)
+        oldest = expired['expired']['oldest']
+        self.assertEqual(self.sh(check, NAME='fix-signup', N=str(oldest - 1)).strip(), '[]')
+        self.assertIn('task.result', self.sh(check, NAME='fix-logout', N=str(oldest - 1)))
+        self.fleet('delete', 'board', 'shared')
+        self.assertIn('Board/shared not found', self.sh_status(check, NAME='fix-signup', N='0').stderr)
 
     def test_a_follow_up_amends_the_existing_task(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
