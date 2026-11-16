@@ -48,12 +48,13 @@ git+https://forge.example/acme/app.git        repository, default branch
        └─ worktree for this Task alone        the worker works and commits here
 ```
 
-- A repository is a `git+` URL. Prefer the repository's local checkout when
-  `private/INSTRUCTIONS.md` maps it to one: write `git+file:///abs/checkout`.
-  Otherwise write `git+https://…`, or `git+ssh://…`. A local checkout skips the
-  clone: the runtime fetches its `origin` and cuts the Task's branch in it.
+- A repository is a `git+` URL. For a Task on this machine, prefer the
+  repository's local checkout when `private/INSTRUCTIONS.md` maps it to one:
+  write `git+file:///abs/checkout`. Otherwise write `git+https://…`, or
+  `git+ssh://…`. A local checkout skips the clone: the runtime fetches its
+  `origin` and cuts the Task's branch in it, where the branch stays.
 - The base is the URL's `#ref`, else the remote's default branch as a fetch
-  just before shows it. On a `git+file` URL a ref names the checkout's own
+  just before shows it; an unreachable remote leaves the refs already there. On a `git+file` URL a ref names the checkout's own
   branch first, which may be stale: write `#origin/main` for the upstream's.
   `?branch=NAME` names the branch, only when the user asks for one. Never
   clone, add a worktree or prepare a checkout yourself.

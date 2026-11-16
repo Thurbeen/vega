@@ -27,7 +27,7 @@ class LocalCheckout(unittest.TestCase):
     def setUp(self):
         self.tool = workspace_git()
         self.assertTrue(self.tool, 'workspace-git ships beside FLEET_BIN; integration is required')
-        self.tmp = Path(tempfile.mkdtemp(prefix='vega-checkout-', dir=ROOT))
+        self.tmp = Path(tempfile.mkdtemp(prefix='vega-test-checkout-', dir=ROOT))
         self.addCleanup(shutil.rmtree, self.tmp)
         self.env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
         self.env.update({'HOME': str(self.tmp), 'GIT_CONFIG_NOSYSTEM': '1',
