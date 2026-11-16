@@ -7,8 +7,8 @@ runs it like any other Task.
 
 ## Install
 
-You need Fleet v3 (with thurbox, or the fleet-only install), `jq`, and a
-coding agent on PATH that you have logged in to. Then:
+You need Fleet 3.1.0 or newer (with thurbox, or the fleet-only install), `jq`,
+and a coding agent on PATH that you have logged in to. Then:
 
 ```sh
 git clone https://github.com/Thurbeen/vega
@@ -20,8 +20,9 @@ On Windows, in PowerShell 7: `./install.ps1`.
 
 The installer:
 
-1. checks that `fleet` is Fleet v3 and that `jq` is on PATH;
-2. runs `fleet init` when there is no Fleet config yet; an existing one is kept;
+1. checks that `fleet` is Fleet 3.1.0 or newer and that `jq` is on PATH;
+2. runs `fleet init`, which writes a Fleet config when there is none (an
+   existing one is kept) and creates the `shared` Board when it is missing;
 3. picks the agent: `--harness NAME`, else the first one `fleet doctor` finds
    on PATH;
 4. adds `[forge.hosts]` for `github.com` and `gitlab.com` when the config has
@@ -29,7 +30,9 @@ The installer:
 5. applies the Task `vega`, which works in this checkout's `workspace/`.
 
 It installs into `--config PATH`, else `FLEET_CONFIG`, else Fleet's per-user
-config. Run it again at any time: it changes only what is missing.
+config. Run it again at any time: it changes only what is missing. A store set
+up before Fleet 3.1.0 has no `shared` Board: run the installer once more, or
+`fleet init`, to add it. VEGA never creates it on its own.
 
 Talk to VEGA in thurbox, where it is the session `vega`, or queue a message
 with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
@@ -66,6 +69,11 @@ you ──request──▶ VEGA ──fleet apply (parent labels)──▶ Fleet
   default branch. Deleting the Task keeps the branch and
   commits uncommitted work to `refs/fleet/preserved/…`. See
   [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
+- **Board timeline.** Every brief tells the worker to publish its milestones
+  (`task.started`, `task.question`, `task.pr.opened`, `task.ci.green`,
+  `task.result`) to the `shared` Board with `fleet event publish`, best effort.
+  VEGA reads them with `fleet event list` as a timeline, and checks each claim
+  against the Task's own status before it reports one.
 - **Forge work.** An authorized worker opens a draft, declares it with
   `fleet declare TASK --change-request URL` and ends every post with
   `<!-- fleet:worker <task uid> -->`. Fleet follows the change and never
@@ -92,7 +100,8 @@ credentials, Fleet stores or personal config here.
 
 ## Tests
 
-Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet v3 binary:
+Contributors need Python 3.11 or newer, `uv`, `jq` and a Fleet 3.1.0 or newer
+binary:
 
 ```sh
 FLEET_BIN=/path/to/fleet uv run --no-project python -m unittest discover -s tests -v

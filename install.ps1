@@ -59,6 +59,9 @@ if (-not $version -or -not ($version.runtimeProtocol -ge 2) -or
     $v = if ($version.version) { $version.version } else { 'unknown' }
     Die "$script:fleet is not Fleet v3 ($v): install Fleet v3 (see README.md)"
 }
+if ($version.kinds -notcontains 'Board') {
+    Die "$script:fleet $($version.version) has no Board: install Fleet 3.1.0 or newer (see README.md)"
+}
 
 # Fleet's own selection: -Config, then FLEET_CONFIG, then the per-user file.
 $named = if ($Config) { $Config } elseif ($env:FLEET_CONFIG) { $env:FLEET_CONFIG } else { '' }

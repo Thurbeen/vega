@@ -131,6 +131,14 @@ class Install(unittest.TestCase):
         self.assertEqual(box.config.read_bytes(), config)
         self.assertIn('already installed', out)
 
+    def test_running_again_restores_a_missing_shared_board(self):
+        box = Sandbox(self)
+        box.run('--config', str(box.config), '--harness', 'codex')
+        box.fleet('delete', 'board', 'shared')
+        box.run('--config', str(box.config), '--harness', 'codex')
+        board = json.loads(box.fleet('get', 'board', 'shared'))
+        self.assertEqual(board['spec']['retention']['maxCount'], 10000)
+
     def test_fleet_config_selects_the_store(self):
         box = Sandbox(self)
         box.run('--harness', 'codex', env=box.env(FLEET_CONFIG=str(box.config)))
@@ -170,6 +178,15 @@ class Install(unittest.TestCase):
         result = box.run('--config', str(box.config), '--harness', 'codex', check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Fleet v3', result.stderr)
+
+    def test_fleet_without_the_board_is_refused(self):
+        v30 = json.dumps({'version': '3.0.4', 'apiVersions': ['fleet/v1alpha1'], 'runtimeProtocol': 2,
+                          'kinds': ['Task', 'TaskConfig', 'EnvProvider', 'ChangeRequest'],
+                          'harnesses': ['codex']})
+        box = Sandbox(self, fleet=f"[ \"$1\" = version ] && echo '{v30}' && exit 0\nexit 1")
+        result = box.run('--config', str(box.config), '--harness', 'codex', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Fleet 3.1.0', result.stderr)
 
     def test_missing_jq_is_reported(self):
         box = Sandbox(self, jq=False)

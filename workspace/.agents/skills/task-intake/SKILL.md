@@ -21,7 +21,11 @@ and the checks. Read the status digest first: a follow-up on a live or
 concluded Task's deliverable is an amendment, and another Task may already work
 in the same repository (see Follow-ups and overlapping work). Read only the
 repository instructions needed to brief the worker. Choose a unique lowercase
-DNS-like Task name.
+DNS-like Task name that the Board has not seen either, since milestones are
+keyed by name: pick another when
+`fleet event list --correlation NAME --after N --limit 1 --json` lists an event,
+with N 0. An `expired` answer means listing again with N one below its
+`oldest`; `Board/shared not found` is no conflict, but report it.
 
 Record the user's ordering and limits on the Tasks, not in your memory:
 
@@ -107,7 +111,7 @@ Task, so the file is safe to delete.
   },
   "spec": {
     "harness": "codex",
-    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
+    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Publish each milestone to the shared Board, best effort: fleet event publish --type task.MILESTONE --subject acme/app --correlation inspect-project --key inspect-project-MILESTONE --data '{}'. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
     "workspace": ["git+https://forge.example/acme/app.git"],
     "env": {"FLEET_CONFIG": "/path/from/your/FLEET_CONFIG"},
     "dispatch": false
@@ -119,7 +123,24 @@ Every brief names the concrete result, the checks, the limits, and how to ask:
 `fleet declare NAME --json '{"kind":"Question","id":"q1","text":"..."}'`, then
 wait for the answer in the inbox. For a reported issue, the brief requires a
 failing end-to-end reproducer first, and an implementation brief requires the
-repository's tests and publishing gate.
+repository's tests and publishing gate. Every brief also carries the Board
+milestones lines below.
+
+## Board milestones
+
+Workers publish their milestones to the `shared` Board, which status-digest
+reads as the timeline. Copy these lines into every brief, with NAME the Task
+and SUBJECT its repository or area:
+
+```text
+Publish each milestone to the shared Board, best effort: a failed publish never blocks the work.
+MILESTONE is started, question, pr.opened, ci.green or result; add -2, -3 to the key when one repeats.
+Data is {} or small, such as {"url":"…"} or {"outcome":"shipped"}; never secrets or brief text.
+fleet event publish --type task.MILESTONE --subject SUBJECT --correlation NAME --key NAME-MILESTONE --data '{}'
+```
+
+A publish retried under its key appends nothing. An event is the worker's
+claim: Questions, changes and results still reach you through Fleet.
 
 ## Forge worker brief
 

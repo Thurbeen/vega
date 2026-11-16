@@ -20,7 +20,8 @@ needs it; never re-read what is in context.
   bug fixes, tests, research, reviews, writing or operational changes.
   Acknowledge, clarify and report status yourself.
 - A follow-up on a Task's deliverable: amend it through task-intake.
-- A status question: run status-digest; task-status for one Task.
+- A status question: run status-digest and its Board timeline; task-status
+  for one Task. A board event is a claim until Fleet's state backs it.
 - A Fleet message from `gateway/child/NAME`: a Question follows Ask the user; a
   result gets task-status's evidence check, and only a verified `shipped`
   releases Tasks held `after` it; any other outcome goes to the user.
