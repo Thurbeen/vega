@@ -21,7 +21,9 @@ and the checks. Read the status digest first: a follow-up on a live or
 concluded Task's deliverable is an amendment, and another Task may already work
 in the same repository (see Follow-ups and overlapping work). Read only the
 repository instructions needed to brief the worker. Choose a unique lowercase
-DNS-like Task name.
+DNS-like Task name that the Board has not seen either: its milestones are keyed
+by name, so `fleet event list --correlation NAME --limit 1 --json` must print
+`[]`.
 
 Record the user's ordering and limits on the Tasks, not in your memory:
 
@@ -107,7 +109,7 @@ Task, so the file is safe to delete.
   },
   "spec": {
     "harness": "codex",
-    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
+    "brief": "Inspect the repository instructions and report the requested finding. Run its required checks. Do not publish without authorization. Publish each milestone to the shared Board, best effort: fleet event publish --type task.MILESTONE --subject acme/app --correlation inspect-project --key inspect-project-MILESTONE --data '{}'. Ask Mission Control by declaring a Question and wait for the answer in your inbox. Record the result through fleet result using the generation of the delivered brief.",
     "workspace": ["git+https://forge.example/acme/app.git"],
     "env": {"FLEET_CONFIG": "/path/from/your/FLEET_CONFIG"},
     "dispatch": false
@@ -130,9 +132,9 @@ and SUBJECT its repository or area:
 
 ```text
 Publish each milestone to the shared Board, best effort: a failed publish never blocks the work.
-Milestones: task.started, task.question, task.pr.opened, task.ci.green, task.result; add -2, -3 to the key when one repeats.
-Data stays small, such as a URL or {"outcome":"shipped"}; never secrets or brief text.
-fleet event publish --type task.MILESTONE --subject SUBJECT --correlation NAME --key NAME-MILESTONE --data '{"url":"URL"}'
+MILESTONE is started, question, pr.opened, ci.green or result; add -2, -3 to the key when one repeats.
+Data is {} or small, such as {"url":"…"} or {"outcome":"shipped"}; never secrets or brief text.
+fleet event publish --type task.MILESTONE --subject SUBJECT --correlation NAME --key NAME-MILESTONE --data '{}'
 ```
 
 A publish retried under its key appends nothing. An event is the worker's

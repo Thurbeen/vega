@@ -70,6 +70,8 @@ printf '%s' "$version" | jq -e '(.runtimeProtocol // 0) >= 2
 	and ((.apiVersions // []) | index("fleet/v1alpha1"))
 	and ((.kinds // []) | index("Task"))' >/dev/null 2>&1 ||
 	die "$(command -v fleet) is not Fleet v3 ($(printf '%s' "$version" | jq -r '.version // "unknown"' 2>/dev/null)): install Fleet v3 (see README.md)"
+printf '%s' "$version" | jq -e '(.kinds // []) | index("Board")' >/dev/null 2>&1 ||
+	die "$(command -v fleet) $(printf '%s' "$version" | jq -r '.version // "unknown"') has no Board: install Fleet 3.1.0 or newer (see README.md)"
 
 # Fleet's own selection: --config, then FLEET_CONFIG, then the per-user file.
 named=${config:-${FLEET_CONFIG:-}}

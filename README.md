@@ -20,7 +20,7 @@ On Windows, in PowerShell 7: `./install.ps1`.
 
 The installer:
 
-1. checks that `fleet` is Fleet v3 and that `jq` is on PATH;
+1. checks that `fleet` is Fleet 3.1.0 or newer and that `jq` is on PATH;
 2. runs `fleet init`, which writes a Fleet config when there is none (an
    existing one is kept) and creates the `shared` Board when it is missing;
 3. picks the agent: `--harness NAME`, else the first one `fleet doctor` finds
