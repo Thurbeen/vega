@@ -7,7 +7,7 @@ review:
 gate:
   - name: vega
     run: uv run --no-project python -m unittest discover -s tests -v
-    instructions: Set FLEET_BIN to an absolute path of a Fleet v3 executable, with jq on PATH; put pwsh on PATH to cover install.ps1. The tests use the real binary and the fake runtime, never a live harness session.
+    instructions: Set FLEET_BIN to an absolute path of a Fleet 3.1.0 or newer executable, with jq on PATH; put pwsh on PATH to cover install.ps1. The tests use the real binary and the fake runtime, never a live harness session.
   - name: hooks
     run: prek run --all-files
 ci:

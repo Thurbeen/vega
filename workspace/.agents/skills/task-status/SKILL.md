@@ -43,6 +43,21 @@ Inspect CLI errors and exit codes; never turn an unreadable store into an empty
 queue. Never poll or wait in the foreground, and do not compete with the
 engine's manager: changes reach you as Fleet messages in your inbox.
 
+## Timeline
+
+The milestones the worker published to the `shared` Board, oldest first:
+
+```sh
+fleet event list --type 'task.*' --correlation NAME
+```
+
+An event is the worker's claim, not evidence: check it against the Task's
+status, declarations and result as above. On exit 5, `Expired`, retention
+dropped the oldest events: list again with the `--after` its hint names and say
+the timeline has a gap. `Board/shared not found` means the store predates Fleet
+3.1.0: say so and never create the Board yourself; running the installer again
+adds it.
+
 ## Steering and the inbox
 
 `fleet send NAME "MESSAGE"` queues a message in the Task's inbox; success means

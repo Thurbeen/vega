@@ -31,6 +31,14 @@ def sh_blocks(body):
     return [block.split('```', 1)[0].strip() for block in body.split('```sh\n')[1:]]
 
 
+def text_blocks(body):
+    return [block.split('```', 1)[0].strip() for block in body.split('```text\n')[1:]]
+
+
+def section(body, heading):
+    return body.split(f'\n## {heading}\n', 1)[1].split('\n## ', 1)[0]
+
+
 def json_blocks(body):
     return [json.loads(block.split('```', 1)[0]) for block in body.split('```json\n')[1:]]
 
@@ -168,7 +176,7 @@ class MissionControl(unittest.TestCase):
         # Serial lanes, limits, open questions and change ownership live on
         # the Tasks, so a cleared or restarted VEGA reads them back from Fleet.
         digest_skill = text('.agents/skills/status-digest/SKILL.md')
-        digest, set_label, release = sh_blocks(digest_skill)
+        digest, set_label, release = sh_blocks(digest_skill)[:3]
         self.apply(self.worker('fix-login', True, **{'vega.fleet.dev/limits': 'draft-only no-merge'}))
         self.apply(self.worker('fix-logout', False, **{'vega.fleet.dev/after': 'fix-login'}))
         self.fleet('reconcile')
@@ -239,6 +247,77 @@ class MissionControl(unittest.TestCase):
         self.assertIn('prompts/mission-control.md', inbox[0])
         self.fleet('reconcile')
         self.assertFalse(self.get('vega')['status'].get('inbox'))
+
+    def sh_status(self, command, **subst):
+        for key, value in subst.items():
+            command = command.replace(key, value)
+        return subprocess.run(['bash', '-euo', 'pipefail', '-c', command], text=True,
+                              capture_output=True, timeout=60, env=self.env, cwd=self.tmp)
+
+    def publish_milestone(self, milestone, data='{"url":"https://forge.example/acme/app/pull/7"}'):
+        brief_lines = text_blocks(section(text('.agents/skills/task-intake/SKILL.md'), 'Board milestones'))
+        publish = [line for block in brief_lines for line in block.splitlines()
+                   if line.startswith('fleet event publish')]
+        self.assertEqual(len(publish), 1, 'the brief lines must carry one publish command')
+        self.sh(publish[0].replace("'{\"url\":\"URL\"}'", shlex.quote(data)),
+                MILESTONE=milestone, SUBJECT='acme/app', NAME='fix-login')
+
+    def test_every_brief_carries_the_board_milestones(self):
+        intake = text('.agents/skills/task-intake/SKILL.md')
+        lines = text_blocks(section(intake, 'Board milestones'))
+        self.assertEqual(len(lines), 1, 'one block of brief lines to copy into every brief')
+        flat = ' '.join(lines[0].split())
+        for milestone in ['task.started', 'task.question', 'task.pr.opened', 'task.ci.green', 'task.result']:
+            self.assertIn(milestone, flat)
+        for required in ['best effort', 'never blocks the work', 'never secrets or brief text',
+                         '--subject SUBJECT', '--correlation NAME', '--key NAME-MILESTONE']:
+            self.assertIn(required, flat)
+        self.assertLessEqual(len(lines[0].splitlines()), 6, 'keep the brief lines short')
+        self.assertIn('Board milestones', ' '.join(section(intake, 'Manifest').split()))
+        self.publish_milestone('started', '{}')
+        self.publish_milestone('pr.opened')
+        self.publish_milestone('pr.opened')
+        events = json.loads(self.fleet('event', 'list', '--correlation', 'fix-login', '--json'))
+        self.assertEqual([e['type'] for e in events], ['task.started', 'task.pr.opened'],
+                         'a retried publish under one key appends nothing')
+        self.assertEqual(events[1]['subject'], 'acme/app')
+        self.assertEqual(events[1]['key'], 'fix-login-pr.opened')
+
+    def test_status_reads_the_board_as_claims(self):
+        status = text('.agents/skills/task-status/SKILL.md')
+        digest_skill = text('.agents/skills/status-digest/SKILL.md')
+        for body in [status, digest_skill]:
+            flat = ' '.join(section(body, 'Timeline').split())
+            for required in ['claim', 'not evidence', 'Board/shared not found', 'exit 5', 'Expired',
+                             'never create']:
+                self.assertIn(required, flat)
+        self.assertIn('timeline', ' '.join(text('prompts/mission-control.md').split()).lower())
+        one = [b for b in sh_blocks(section(status, 'Timeline')) if 'fleet event list' in b]
+        every = [b for b in sh_blocks(section(digest_skill, 'Timeline')) if 'fleet event list' in b]
+        self.assertEqual((len(one), len(every)), (1, 1))
+        self.assertIn("--correlation NAME", one[0])
+        self.assertIn('--after SEQ', every[0])
+        head = re.search(r'`(fleet get board shared \| jq [^`]+)`', digest_skill).group(1)
+        self.assertEqual(self.sh(head).strip(), '0')
+        self.publish_milestone('pr.opened')
+        self.assertIn('task.pr.opened', self.sh(one[0], NAME='fix-login'))
+        self.assertEqual(self.sh(head).strip(), '1')
+        timeline = self.sh(every[0], SEQ='0').splitlines()
+        self.assertEqual(timeline, ['1  fix-login  task.pr.opened  https://forge.example/acme/app/pull/7'])
+        self.assertEqual(self.sh(every[0], SEQ='1'), '')
+        # Retention dropped the events after the cursor: the reader is told
+        # where the log resumes, through the pipe.
+        self.apply({'apiVersion': 'fleet/v1alpha1', 'kind': 'Board', 'metadata': {'name': 'shared'},
+                    'spec': {'retention': {'maxCount': 1}}})
+        self.publish_milestone('ci.green', '{}')
+        self.publish_milestone('result', '{"outcome":"shipped"}')
+        expired = self.sh_status(every[0], SEQ='0')
+        self.assertEqual(expired.returncode, 5, expired.stderr)
+        self.assertIn('expired: list again with --after 2', expired.stdout)
+        self.fleet('delete', 'board', 'shared')
+        missing = self.sh_status(one[0], NAME='fix-login')
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn('Board/shared not found', missing.stderr)
 
     def test_a_follow_up_amends_the_existing_task(self):
         intake = text('.agents/skills/task-intake/SKILL.md')

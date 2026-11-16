@@ -131,6 +131,12 @@ class Install(unittest.TestCase):
         self.assertEqual(box.config.read_bytes(), config)
         self.assertIn('already installed', out)
 
+    def test_a_store_from_before_the_board_gets_the_shared_board(self):
+        box = Sandbox(self)
+        box.run('--config', str(box.config), '--harness', 'codex')
+        board = json.loads(box.fleet('get', 'board', 'shared'))
+        self.assertEqual(board['spec']['retention']['maxCount'], 10000)
+
     def test_fleet_config_selects_the_store(self):
         box = Sandbox(self)
         box.run('--harness', 'codex', env=box.env(FLEET_CONFIG=str(box.config)))

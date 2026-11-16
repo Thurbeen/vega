@@ -44,3 +44,22 @@ fleet get task NAME | jq '.spec.dispatch = true | .metadata.labels |= del(.["veg
 
 A `Concluded` line with no `ask:` or `attention:` is finished; report it once.
 Delete a Task only when the user authorizes cleanup, as task-status explains.
+
+## Timeline
+
+Workers publish their milestones to the `shared` Board (see task-intake). After
+the digest, read what is new since SEQ, the last `seq` you read; after a clear,
+start from the Board's head, `fleet get board shared | jq '.status.head // 0'`,
+since the digest already holds the state. Each line is `seq task type data`:
+
+```sh
+fleet event list --type 'task.*' --after SEQ --json | jq -r 'if type == "object" and .expired then "expired: list again with --after \(.expired.oldest - 1)" else .[] | "\(.seq)  \(.correlation // "-")  \(.type)  \([.data | .. | scalars | tostring] | join(" "))" end'
+```
+
+An event is a worker's claim, not evidence: a `task.result` or `task.pr.opened`
+counts only once the Task's own status, declarations and result back it, as
+task-status checks. `expired` (exit 5, `Expired`) means retention dropped the
+events after SEQ: list again as it says and tell the user the timeline has a
+gap. `Board/shared not found` means this store predates Fleet 3.1.0: say so,
+report from the digest alone, and never create the Board yourself; running the
+installer again adds it.

@@ -119,7 +119,24 @@ Every brief names the concrete result, the checks, the limits, and how to ask:
 `fleet declare NAME --json '{"kind":"Question","id":"q1","text":"..."}'`, then
 wait for the answer in the inbox. For a reported issue, the brief requires a
 failing end-to-end reproducer first, and an implementation brief requires the
-repository's tests and publishing gate.
+repository's tests and publishing gate. Every brief also carries the Board
+milestones lines below.
+
+## Board milestones
+
+Workers publish their milestones to the `shared` Board, which status-digest
+reads as the timeline. Copy these lines into every brief, with NAME the Task
+and SUBJECT its repository or area:
+
+```text
+Publish each milestone to the shared Board, best effort: a failed publish never blocks the work.
+Milestones: task.started, task.question, task.pr.opened, task.ci.green, task.result; add -2, -3 to the key when one repeats.
+Data stays small, such as a URL or {"outcome":"shipped"}; never secrets or brief text.
+fleet event publish --type task.MILESTONE --subject SUBJECT --correlation NAME --key NAME-MILESTONE --data '{"url":"URL"}'
+```
+
+A publish retried under its key appends nothing. An event is the worker's
+claim: Questions, changes and results still reach you through Fleet.
 
 ## Forge worker brief
 
