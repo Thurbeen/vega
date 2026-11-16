@@ -42,6 +42,24 @@ Uninstall with `./install.sh --uninstall` (`./install.ps1 -Uninstall`). It
 deletes the Task `vega`; its workers and this checkout stay. To change the
 agent, uninstall, then install with another `--harness`.
 
+## Moving from Fleet 2
+
+Fleet 2 shipped VEGA inside its binary, and its `fleet init` wrote VEGA's
+workspace. Fleet 3 does neither. Fleet 3 reads no Fleet 2 config and no
+Fleet 2 store, so the Fleet 2 Task `vega` and its workers do not carry over.
+
+1. Move the install to Fleet 3 with thurbox's
+   [migration guide](https://github.com/Thurbeen/thurbox/blob/main/docs/migrating-to-v3.md).
+   It covers the new config, one `fleet up` per store and its service unit,
+   workspace trust, and what Fleet 2 left behind.
+2. Install VEGA from this checkout, as above.
+3. Copy your `CUSTOM.md` and `private/INSTRUCTIONS.md` from the workspace
+   Fleet 2 wrote, the directory `[starter] workspace` names in the old
+   config, into this checkout's `workspace/`. Fleet 3 does not read that old
+   workspace, and refuses a `[starter]` section.
+4. Ask VEGA again for each piece of work you still need. A worker names its
+   repositories as `git+https://…` URLs.
+
 ## How it works
 
 ```text
@@ -60,8 +78,8 @@ you ──request──▶ VEGA ──fleet apply (parent labels)──▶ Fleet
   cleared or restarted VEGA rebuilds its state from the
   [status digest](workspace/.agents/skills/status-digest/SKILL.md).
 - **Workspaces are URLs.** A worker names `git+https://…` repositories; the
-  runtime cuts a worktree on the branch `<task name>.<task uid>` from the URL's
-  `#ref` or the remote's default branch. Deleting the Task keeps the branch and
+  runtime cuts a worktree on a branch named after its session key, which ends
+  in the Task's uid, from the URL's `#ref` or the remote's default branch. Deleting the Task keeps the branch and
   commits uncommitted work to `refs/fleet/preserved/…`. See
   [task-intake](workspace/.agents/skills/task-intake/SKILL.md).
 - **Forge work.** An authorized worker opens a draft, declares it with
