@@ -10,20 +10,23 @@ runs it like any other Task.
 Fleet v3 is not yet fully stable, so install VEGA on Fleet v2 for now. VEGA
 does not install itself there: the last Fleet v2 release,
 [v2.24.0](https://github.com/Thurbeen/fleet/releases/tag/v2.24.0), bundles
-VEGA at commit
-[`3c4798d`](https://github.com/Thurbeen/vega/tree/3c4798dbdb33672576958cf8f1849c16e519d95d),
-and `fleet up` starts it:
+VEGA, based on commit
+[`3c4798d`](https://github.com/Thurbeen/vega/tree/3c4798dbdb33672576958cf8f1849c16e519d95d)
+with Fleet's own prompt patch, and `fleet up` starts it.
+
+Fleet v2 runs real sessions through Thurbox with `thurbox-cli` on PATH. Take
+Thurbox [v2.89.0](https://github.com/Thurbeen/thurbox/releases/tag/v2.89.0),
+the last v2 release: Thurbox v3 ships its own Fleet v3. Install Thurbox first,
+then Fleet, so Fleet v2 is the `fleet` left on PATH:
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/Thurbeen/thurbox/main/scripts/install.sh | VERSION=v2.89.0 sh
 curl -fsSL https://github.com/Thurbeen/fleet/releases/download/v2.24.0/install-release.sh | sh
 fleet init --harness claude   # or codex
 fleet up
 ```
 
-Fleet v2 runs real sessions through Thurbox with `thurbox-cli` on PATH. Take
-Thurbox [v2.89.0](https://github.com/Thurbeen/thurbox/releases/tag/v2.89.0),
-the last v2 release: Thurbox v3 sets up its own Fleet v3. The
-[Fleet v2.24.0 README](https://github.com/Thurbeen/fleet/tree/v2.24.0#setup)
+The [Fleet v2.24.0 README](https://github.com/Thurbeen/fleet/tree/v2.24.0#setup)
 covers the rest. This checkout is for Fleet v3.
 
 ## Install on Fleet v3 (not yet fully stable)

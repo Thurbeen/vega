@@ -126,9 +126,10 @@ class MissionControl(unittest.TestCase):
     def test_the_readme_recommends_fleet_v2_until_v3_is_stable(self):
         readme = text('../README.md')
         notice = readme.index(FLEET_V2_NOTICE)
-        self.assertLess(notice, readme.index('## Install on Fleet v3 (not yet fully stable)'))
+        v3_install = readme.index('## Install on Fleet v3 (not yet fully stable)')
+        self.assertLess(notice, v3_install)
         pinned = 'https://github.com/Thurbeen/fleet/releases/download/v2.24.0/install-release.sh'
-        self.assertIn(pinned, readme[notice:])
+        self.assertIn(pinned, readme[notice:v3_install])
 
     def test_guidance_names_only_what_fleet_v3_has(self):
         for asset in GUIDANCE + ['../README.md', '../AGENTS.md']:
