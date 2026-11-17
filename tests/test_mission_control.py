@@ -26,6 +26,13 @@ def text(asset):
     return (WORKSPACE / asset).read_text()
 
 
+FLEET_V2_NOTICE = '## Use Fleet v2 for now'
+
+
+def without_fleet_v2_notice(body):
+    return re.sub(rf'{FLEET_V2_NOTICE}\n.*?(?=^## )', '', body, flags=re.S | re.M)
+
+
 def sh_blocks(body):
     """The shell commands a skill or prompt ships, in order."""
     return [block.split('```', 1)[0].strip() for block in body.split('```sh\n')[1:]]
@@ -116,11 +123,17 @@ class MissionControl(unittest.TestCase):
             self.assertIn('fleet is the source of truth', flat, asset)
             self.assertIn('user preferences only', flat, asset)
 
+    def test_the_readme_recommends_fleet_v2_until_v3_is_stable(self):
+        readme = text('../README.md')
+        notice = readme.index(FLEET_V2_NOTICE)
+        v3_install = readme.index('## Install on Fleet v3 (not yet fully stable)')
+        self.assertLess(notice, v3_install)
+        pinned = 'https://github.com/Thurbeen/fleet/releases/download/v2.24.0/install-release.sh'
+        self.assertIn(pinned, readme[notice:v3_install])
+
     def test_guidance_names_only_what_fleet_v3_has(self):
-        # Fleet v2's runtime mapping, Thurbox session commands and repository
-        # objects are gone; places replace hosts.
         for asset in GUIDANCE + ['../README.md', '../AGENTS.md']:
-            body = text(asset)
+            body = without_fleet_v2_notice(text(asset))
             for gone in ['runtime.repositories', 'thurbox-cli', 'keyPrefix', 'RepositoryUnmapped',
                          '"repositories"', 'session send', 'session capture', 'v2.', '"host"',
                          'runtime.modelEnv', '"model"']:
