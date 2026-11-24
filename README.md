@@ -78,16 +78,19 @@ you ──request──▶ VEGA ──fleet apply (parent labels)──▶ Fleet
 | `install.sh`, `install.ps1` | Install or uninstall VEGA |
 | `tasks/vega.json` | The Task the installer applies, once it sets the agent, workspace and config |
 | `workspace/AGENTS.md` | VEGA's rules |
-| `workspace/prompts/mission-control.md` | Start-up, each turn, replies and re-hydration |
+| `workspace/prompts/mission-control.md` | Start-up, each turn and replies |
 | `workspace/.agents/skills/task-intake/SKILL.md` | Create and dispatch a worker Task |
 | `workspace/.agents/skills/task-status/SKILL.md` | One Task's state, steering and result checks |
-| `workspace/.agents/skills/status-digest/SKILL.md` | One line per Task, and the labels that hold order and limits |
+| `workspace/.agents/skills/status-digest/SKILL.md` | One short line per live Task or Task that needs you |
+| `workspace/briefs/worker.md` | The standing rules every worker brief ends with |
 
 The skills are standard `SKILL.md` packages; `npx skills add . --list` lists
 them. Installing the skills alone creates no Task.
 
 Keep personal additions in `workspace/CUSTOM.md` or
-`workspace/private/INSTRUCTIONS.md`; git ignores both. Never commit
+`workspace/private/INSTRUCTIONS.md`, and rules for every worker on this
+machine, such as build limits, in `workspace/private/worker-rules.md`, which
+joins every brief, so nothing secret; git ignores them. Never commit
 credentials, Fleet stores or personal config here.
 
 ## Tests
@@ -102,8 +105,9 @@ prek run --all-files
 The tests install VEGA with both installers into a sandboxed HOME and a store
 on Fleet's fake runtime, so no agent starts. The PowerShell tests run when
 `pwsh` is on PATH. Then they run the commands the guidance ships: workers
-report into VEGA's inbox, the digest rebuilds state, follow-ups amend, and
-every example resource applies. They cannot prove a model obeys the prose.
+report into VEGA's inbox, the digest rebuilds state, a dispatch writes only
+the task-specific brief, follow-ups amend, and every `fleet` flag the guidance
+names exists. They cannot prove a model obeys the prose.
 
 ## License
 

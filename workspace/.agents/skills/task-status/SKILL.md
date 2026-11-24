@@ -32,7 +32,8 @@ diagnostic when verification itself requires substantive work.
 | `TrustUnmapped` or `WorkspaceUntrusted` attention | The agent does not trust its workspace, or Fleet has no way to tell it to. Report the condition's message to the user; never answer a trust dialog yourself. |
 | Spawned without a True `Briefed` condition | The brief is not confirmed delivered, so the work has not started. Never resend the brief or `fleet send` it. |
 | Briefed | Brief delivery is recorded; completion is not yet recorded. |
-| `BriefUndelivered` or `DeliveryQueued` attention | The text waits on a person, such as a dialog in the session. Report the condition's message to the user. |
+| `BriefUndelivered` attention | The brief waits on a person, such as a dialog in the session. Report the condition's message to the user. |
+| `DeliveryUnconfirmed`, `DeliveryFailed` or `DeliveryQueued` attention | Fleet gave up on the inbox entry the condition names and never sends it again. Once its cause is cleared, `fleet send NAME --retry KEY` queues a copy; `fleet send NAME --drop KEY` removes one no longer needed. Never retype it with a plain `fleet send`. |
 | `Paused` condition True | The agent is stopped; Fleet resumes it for its next message or amendment. Not a failure. |
 | Stalled or other NeedsAttention | Explain the recorded condition. Check the runtime before proposing recovery. |
 | Unknown runtime answers | State is unknown. Do not create a replacement blindly. |
@@ -62,48 +63,34 @@ Task nor replaces its result. A follow-up on the same deliverable is a
 `fleet amend` (see task-intake), which re-opens it until the worker records a
 result for the new generation. A new substantive request requires a new Task.
 
-## Declared changes
+## Checking a result
 
-`fleet declare NAME --change-request URL` ensures a ChangeRequest mirror and
-appends a worker declaration. Inspect `status.declared`, `status.forge` and
-`fleet get changerequest MIRROR` for observations, gaps and conditions. An
-arbitrary fact can be recorded with
-`fleet declare NAME --json '{"kind":"Note","text":"Verified locally"}'`;
-it concludes nothing. Neither declaration is a final result.
+A child's result reaches your inbox once per generation; report it once, as
+one `Done:` line. Later news on the same Task changes nothing unless it changes
+the outcome. A summary over 4 000 bytes arrives as its size and
+`fleet get task NAME`; read only `.status.result.summary`.
 
-Forge feedback is relayed into the worker's inbox. Ready transitions depend on
-the configured policy, worker completion and idle state; Fleet never merges a
-change. Missing observations and stale heads are not proof that checks or review
-passed. ChangeRequest mirrors outlive Tasks; deleting a Task does not delete
-its changes or mirrors. Do not declare or conclude another worker's work on its
-behalf.
+A result is the worker's claim for the generation in `status.brief.generation`;
+it is not proof. Verify the evidence the promised result needs, never redo the
+work. For a pull or merge request deliverable, check `status.declared` for the
+real URL, then `fleet status changerequest MIRROR` for the requested base and
+the checks, CI and review required for that stage; a draft-only deliverable
+needs no ready or merge gates. A local commit, an undeclared change or a
+blocked required gate does not satisfy it. Fleet never merges; mirrors outlive
+Tasks. Never declare or record a result for another worker.
 
-## Worker completion
+## Cleanup
 
-A worker records its own answer for the generation in `status.brief.generation`.
-A delivered amendment advances it; a dispatch or forge edit advances only
-`metadata.generation`. Fleet refuses a result while an amendment waits to be
-delivered:
+A Concluded Task keeps its session and worktree, and their disk, until it is
+deleted. Delete only with the user's consent, given once as a standing
+preference or for these Tasks: a Task whose result was reported, with no
+`ask:` or `attention:`, whose declared changes are merged or closed, and whose
+work is pushed or no longer needed. These are the candidates:
 
-```text
-fleet result NAME --generation 1 --outcome shipped --summary "Verified result"
+```sh
+fleet list task --json | jq -r '.[] | select(.status.phase == "Concluded") | .metadata.name'
 ```
 
-Replace the example generation and summary with actual evidence. Outcomes are
-`shipped`, `stuck`, `failed` or `not-applicable`. Supply declared structured outputs
-and authorized artifact URLs when required. Do not report another worker's result
-for it. Fleet stores the claim; it is not proof that a PR, CI or deployment succeeded.
-For a user-authorized pull or merge request deliverable, verify a real declared
-URL and the requested base. Verify everything required by the user or repository
-for that delivery stage, including checks, CI and review. A local commit, an
-undeclared change or blocked required gates do not satisfy that result. A
-draft-only deliverable does not require later ready or merge gates unless
-requested. Do not infer publication authorization for Tasks whose requested
-result did not include it.
-
-A Concluded Task keeps its session and workspace until deletion. Delete only
-when the user authorizes cleanup and the conversation no longer needs it:
-`fleet delete task NAME`. The runtime then removes the worktree and keeps the
-branch; uncommitted work goes to `refs/fleet/preserved/...` in the repository.
-Confirm the work is pushed or no longer needed first. A `file://` directory
-stays as it is.
+`fleet delete task NAME` then removes the worktree and keeps the branch;
+uncommitted work goes to `refs/fleet/preserved/...` in the repository. A
+`file://` directory stays as it is. ChangeRequest mirrors outlive the Task.

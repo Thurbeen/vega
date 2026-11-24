@@ -7,9 +7,9 @@ Fleet is the source of truth: Tasks, briefs, labels, declarations, results and
 inboxes survive a restart or a clear. Agent memory holds user
 preferences only. `FLEET_CONFIG` names your Fleet configuration.
 
-At session start, after a clear, or when unsure of the state, follow
-`prompts/mission-control.md`. Load skills when needed: `status-digest` for
-status and re-hydration, `task-intake` to dispatch, `task-status` for one Task.
+Follow `prompts/mission-control.md`. Load skills when needed: `status-digest`
+for status and after a clear, `task-intake` to dispatch, `task-status` for one
+Task.
 
 ## Rules
 
@@ -26,12 +26,12 @@ status and re-hydration, `task-intake` to dispatch, `task-status` for one Task.
 - A claim is not evidence, idle is not done, unknown stays unknown. Use only
   commands the installed `fleet --help` shows.
 - Keep secrets, private instructions and local paths out of briefs and shared
-  content. No time, effort or completion estimates.
-- Put these three rules in every brief whose worker may open a change on a
-  forge, and keep them yourself: open every change as a draft; declare it with
-  `fleet declare TASK --change-request URL` the moment it is opened; end every
-  post on it with `<!-- fleet:worker <task uid> -->` on its own line, the uid
-  from `fleet get task TASK`.
+  content. `private/worker-rules.md` is the exception: it joins every brief,
+  so it holds only rules fit for any worker. No time, effort or completion estimates.
+- Every brief ends with `briefs/worker.md`, the workers' standing rules (see
+  task-intake): drafts, `fleet declare TASK --change-request URL` the moment a
+  change opens, the `<!-- fleet:worker <task uid> -->` forge marker, no
+  publish or merge without authorization. Keep them yourself.
 
 ## Local customization
 

@@ -1,6 +1,6 @@
 ---
 name: status-digest
-description: One line per Task of everything Mission Control tracks, read from Fleet, and the labels that record order, limits and pending decisions. Load for any status question, at session start and after a clear.
+description: One short line per live Task or Task that needs the user, read from Fleet, and the labels that record order and pending decisions. Load for any status question, at session start and after a clear.
 license: MIT
 ---
 
@@ -10,26 +10,26 @@ Fleet holds Mission Control's state. Read it with this one command, which needs
 `jq`, and work from its lines. Do not dump raw JSON or keep a copy elsewhere.
 
 ```sh
-fleet list task --json | jq -r '.[] | select(.metadata.name != "vega") | (.status // {}) as $s | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [.metadata.name, ($s.phase // "-"), (if .spec.dispatch then empty else "held" end), ((.metadata.labels // {}) | to_entries[] | select((.key | startswith("vega.fleet.dev/")) and .value != "") | "\(.key | ltrimstr("vega.fleet.dev/")):\(.value)"), ((.spec.workspace // [])[] | "ws:\(.)"), (($s.declared // [])[] | select(.kind == "ChangeRequest") | "cr:\(.url)"), ([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($s.result // empty | if .generation < $g then "amended" else "result:\(.outcome)" end), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] | join("  ")'
+fleet list task --json | jq -r '[.[] | (.metadata.labels // {})["vega.fleet.dev/after"] // empty] as $waited | .[] | select(.metadata.name != "vega") | (.status // {}) as $s | (.metadata.labels // {}) as $l | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($l["vega.fleet.dev/needs"] // "" | select(. != "") | "needs:\(.)"), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] as $you | select($s.phase != "Concluded" or ($you | length) > 0 or ($s.result.generation // 0) < $g or ($s.result.outcome // "shipped") != "shipped" and (.metadata.name | IN($waited[]))) | [.metadata.name, (if .spec.dispatch then $s.phase // "Pending" else "held" end), ($l["vega.fleet.dev/after"] // "" | select(. != "") | "after:\(.)"), (if ($s.result.generation // $g) < $g then "amended" elif ($s.result.outcome // "shipped") != "shipped" then "result:\($s.result.outcome)" else empty end), $you[]] | join(" ")'
 ```
+
+A Task that shipped with nothing pending has no line: its result was reported
+when it reached your inbox, as was any other outcome. One that did not ship
+stays while a held Task waits `after` it: the user decides what that lane does.
+No lines means "Nothing running."
 
 | Field | Meaning |
 | --- | --- |
-| `held` | `dispatch` is false: queued behind `after`, or waiting on the user. |
-| `request:` | The request, in the user's words. |
+| `held` | `dispatch` is false: queued `after` another, or waiting on the user. |
 | `after:` | Dispatch this Task when the named one concludes. |
-| `limits:` | The user's authorization limits, such as `draft-only no-merge`. |
+| `amended` | An amendment waits for the worker's answer. |
+| `result:` | Concluded without `shipped`, and a held Task waits `after` it: the user decides. |
+| `ask:ID` | A worker Question not yet answered: `fleet send NAME --answers ID "TEXT"`. |
 | `needs:` | A decision waiting on the user. |
-| `ws:URL` | A workspace URL; Tasks on one repository may overlap (see task-intake). |
-| `ask:ID` | A worker Question not yet answered: `fleet send NAME --answers ID TEXT`. |
-| `cr:URL` | A change the Task declared, so the Task that owns it. |
-| `result:` | The worker's claimed outcome; verify it with task-status. |
-| `amended` | An amendment waits for the worker's answer; its earlier result no longer counts. |
-| `attention:` | A `NeedsAttention` reason; inspect with task-status. |
+| `attention:` | A `NeedsAttention` reason; see task-status. |
 
 A user answer for a held Task goes into its labels or a new Task, never only
-into this conversation. Labels change no spec or brief. Set or replace one; an
-empty value clears it:
+into this conversation. Set or replace a label; an empty value clears it:
 
 ```sh
 fleet label task NAME "vega.fleet.dev/needs=choose a base branch"
@@ -41,6 +41,3 @@ Release a held Task only when its `after` Task concluded with a verified
 ```sh
 fleet get task NAME | jq '.spec.dispatch = true | .metadata.labels |= del(.["vega.fleet.dev/after"], .["vega.fleet.dev/needs"]) | del(.status)' | fleet apply -f -
 ```
-
-A `Concluded` line with no `ask:` or `attention:` is finished; report it once.
-Delete a Task only when the user authorizes cleanup, as task-status explains.

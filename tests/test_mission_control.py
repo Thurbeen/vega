@@ -3,7 +3,7 @@
 ./install.sh puts VEGA into a sandboxed store, then each check runs the
 commands the installed guidance ships: a worker reports back through VEGA's
 inbox, the status digest rebuilds the working state from Fleet, and
-re-hydration is one ordinary inbox delivery. They cannot prove a model obeys
+a dispatch writes only the task-specific brief. They cannot prove a model obeys
 the prose.
 """
 import json
@@ -19,7 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT / 'workspace'
 GUIDANCE = ['AGENTS.md', 'prompts/mission-control.md', '.agents/skills/task-intake/SKILL.md',
-            '.agents/skills/task-status/SKILL.md', '.agents/skills/status-digest/SKILL.md']
+            '.agents/skills/task-status/SKILL.md', '.agents/skills/status-digest/SKILL.md',
+            'briefs/worker.md']
 
 
 def text(asset):
@@ -29,10 +30,6 @@ def text(asset):
 def sh_blocks(body):
     """The shell commands a skill or prompt ships, in order."""
     return [block.split('```', 1)[0].strip() for block in body.split('```sh\n')[1:]]
-
-
-def json_blocks(body):
-    return [json.loads(block.split('```', 1)[0]) for block in body.split('```json\n')[1:]]
 
 
 class MissionControl(unittest.TestCase):
@@ -59,11 +56,11 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(vega['status']['phase'], 'Briefed')
         self.assertEqual(vega['spec']['env']['FLEET_CONFIG'], str(self.config))
 
-    def sh(self, command, **subst):
+    def sh(self, command, cwd=None, **subst):
         for key, value in subst.items():
             command = command.replace(key, value)
         result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command], text=True,
-                                capture_output=True, timeout=60, env=self.env, cwd=self.tmp)
+                                capture_output=True, timeout=60, env=self.env, cwd=cwd or self.tmp)
         self.assertEqual(result.returncode, 0, command + '\n' + result.stdout + result.stderr)
         return result.stdout
 
@@ -78,19 +75,22 @@ class MissionControl(unittest.TestCase):
         path.write_text(json.dumps(resource))
         self.fleet('apply', '-f', str(path), '--json')
 
-    def worker(self, name, dispatch, **labels):
-        """The task-intake example, as VEGA fills it in for one request."""
+    def manifest(self, name, dispatch, brief='Fix the login redirect.', limits='draft-only no-merge',
+                 urls=('git+https://forge.example/acme/app.git',)):
         intake = text('.agents/skills/task-intake/SKILL.md')
-        task = next(t for t in json_blocks(intake) if t['kind'] == 'Task' and 'labels' in t['metadata'])
-        task['metadata']['name'] = name
-        uid_command = re.search(r'`(fleet get task vega \| jq -r \.metadata\.uid)`', intake).group(1)
-        uid = self.sh(uid_command).strip()
-        task['metadata']['labels'] = {key: uid if value == 'VEGA_UID' else value
-                                      for key, value in task['metadata']['labels'].items()}
+        build, = [b for b in sh_blocks(intake) if b.startswith('jq -n')]
+        workspace = self.tmp / 'vega-workspace'
+        if not workspace.exists():
+            shutil.copytree(WORKSPACE, workspace, ignore=shutil.ignore_patterns('dispatch', 'private'))
+            (workspace / 'dispatch').mkdir()
+        (workspace / 'dispatch' / f'{name}.txt').write_text(brief + '\n')
+        self.sh(build, cwd=workspace, NAME=name, REQUEST='fix the login', LIMITS=limits,
+                DISPATCH=json.dumps(dispatch), URL=' '.join(map(shlex.quote, urls)))
+        return json.loads((workspace / 'dispatch' / f'{name}.json').read_text())
+
+    def worker(self, name, dispatch, **labels):
+        task = self.manifest(name, dispatch)
         task['metadata']['labels'].update(labels)
-        task['spec']['env']['FLEET_CONFIG'] = self.env['FLEET_CONFIG']
-        task['spec']['harness'] = self.get('vega')['spec']['harness']
-        task['spec']['dispatch'] = dispatch
         return task
 
     def test_always_loaded_guidance_stays_small(self):
@@ -128,16 +128,6 @@ class MissionControl(unittest.TestCase):
             prose = re.sub(r'`[^`]*`', '', re.sub(r'```.*?```', '', body, flags=re.S))
             self.assertIsNone(re.search(r'\bhosts?\b', prose.lower()), asset)
 
-    def test_every_example_resource_applies(self):
-        examples = [r for a in GUIDANCE for r in json_blocks(text(a))]
-        self.assertGreaterEqual(len(examples), 3)
-        for resource in examples:
-            resource = json.loads(json.dumps(resource).replace('VEGA_UID', self.get('vega')['metadata']['uid']))
-            resource.setdefault('spec', {})
-            if resource['kind'] == 'Task':
-                resource['spec']['dispatch'] = False
-            self.apply(resource)
-
     def test_the_worker_workspace_is_made_by_the_runtime(self):
         self.apply(self.worker('fix-login', True))
         self.fleet('reconcile')
@@ -165,8 +155,6 @@ class MissionControl(unittest.TestCase):
         self.assertTrue(received[-1].endswith('/result/1'), received)
 
     def test_the_status_digest_rebuilds_state_from_fleet(self):
-        # Serial lanes, limits, open questions and change ownership live on
-        # the Tasks, so a cleared or restarted VEGA reads them back from Fleet.
         digest_skill = text('.agents/skills/status-digest/SKILL.md')
         digest, set_label, release = sh_blocks(digest_skill)
         self.apply(self.worker('fix-login', True, **{'vega.fleet.dev/limits': 'draft-only no-merge'}))
@@ -178,21 +166,20 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(len(board), 2, board)
         lines = {line.split()[0]: line for line in board}
         self.assertNotIn('vega', lines)
-        self.assertIn('limits:draft-only no-merge', lines['fix-login'])
-        # The workspace shows which live Tasks overlap or own a follow-up.
-        self.assertIn('ws:git+https://forge.example/acme/app.git', lines['fix-login'])
         self.assertIn('ask:q1', lines['fix-login'])
+        for line in board:
+            self.assertLessEqual(len(line), 60, 'one short line per Task')
+            for long_field in ['limits:', 'request:', 'ws:', 'cr:', 'forge.example']:
+                self.assertNotIn(long_field, line)
         self.assertIn('held', lines['fix-logout'])
         self.assertIn('after:fix-login', lines['fix-logout'])
         self.assertNotIn('{', '\n'.join(board), 'the digest must not dump JSON')
-        # A failed or stuck predecessor must not start the rest of its lane.
         for body in [digest_skill, text('prompts/mission-control.md')]:
             self.assertIn('verified `shipped`', ' '.join(body.split()))
         self.fleet('send', 'fix-login', '--answers', 'q1', 'Yes')
         self.sh(set_label, NAME='fix-logout')
         self.assertIn('needs:', self.sh(digest))
         self.assertNotIn('ask:q1', self.sh(digest))
-        # An empty value clears a label from the board.
         self.fleet('label', 'task', 'fix-logout', 'vega.fleet.dev/needs=')
         self.assertNotIn('needs:', self.sh(digest))
         generation = self.get('fix-logout')['metadata']['generation']
@@ -214,31 +201,171 @@ class MissionControl(unittest.TestCase):
                          'label a `needs:` answer as status-digest shows']:
             self.assertIn(required, flat)
         answer = [c for c in flat.split('`')[1::2] if '--answers' in c]
-        self.assertEqual(answer, ['fleet send NAME --answers ID TEXT'])
+        self.assertEqual(answer, ['fleet send NAME --answers ID "TEXT"'])
         self.apply(self.worker('fix-login', True))
         self.fleet('reconcile')
         self.fleet('declare', 'fix-login', '--json',
                    '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
         digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
         self.assertIn('ask:q1', self.sh(digest))
-        self.sh(answer[0].replace('TEXT', "'Keep it (Recommended)'"), NAME='fix-login', ID='q1')
+        self.sh(answer[0], NAME='fix-login', ID='q1', TEXT='Keep it (Recommended)')
         self.assertNotIn('ask:q1', self.sh(digest))
         inbox = [entry['text'] for entry in self.get('fix-login')['status']['inbox']]
         self.assertTrue(any('Keep it (Recommended)' in t for t in inbox), inbox)
 
-    def test_vega_rehydrates_through_its_own_inbox_without_a_clear(self):
-        prompt = text('prompts/mission-control.md')
-        blocks = sh_blocks(prompt)
-        self.assertFalse([b for b in blocks if '/clear' in b], 'mission-control must not queue /clear')
-        self.assertIn('never queue one in reply to a re-hydrate', ' '.join(prompt.split()).lower())
-        rehydrate = [b for b in blocks if 'VEGA re-hydrate' in b]
-        self.assertEqual(len(rehydrate), 1, 'mission-control must ship one re-hydrate block')
-        self.sh(rehydrate[0])
-        inbox = [entry['text'] for entry in self.get('vega')['status']['inbox']]
-        self.assertEqual(len(inbox), 1, inbox)
-        self.assertIn('prompts/mission-control.md', inbox[0])
+    def test_vega_rehydrates_only_when_its_context_was_cleared(self):
+        for asset in GUIDANCE:
+            body = text(asset)
+            self.assertNotIn('fleet send vega', body, asset)
+            self.assertNotIn('re-hydrate:', body, asset)
+        prompt = ' '.join(text('prompts/mission-control.md').split()).lower()
+        self.assertIn('only at session start or after a clear', prompt)
+
+    def test_a_finished_task_leaves_the_digest(self):
+        digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.apply(self.worker('fix-login', True))
+        self.apply(self.worker('fix-logout', True))
         self.fleet('reconcile')
-        self.assertFalse(self.get('vega')['status'].get('inbox'))
+        for name in ['fix-login', 'fix-logout']:
+            self.fleet('result', name, '--generation', '1', '--outcome', 'shipped', '--summary', 'Done')
+        self.fleet('declare', 'fix-logout', '--json', '{"kind":"Question","id":"q1","text":"Also v1?"}')
+        self.fleet('reconcile')
+        board = self.sh(digest).splitlines()
+        self.assertEqual([line.split()[0] for line in board], ['fix-logout'], board)
+        self.assertIn('ask:q1', board[0])
+
+    def test_a_task_that_did_not_ship_stays_on_the_digest(self):
+        digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.apply(self.worker('fix-login', True))
+        self.apply(self.worker('fix-logout', False, **{'vega.fleet.dev/after': 'fix-login'}))
+        self.fleet('reconcile')
+        self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'stuck', '--summary', 'Blocked')
+        self.fleet('reconcile')
+        lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
+        self.assertIn('result:stuck', lines['fix-login'])
+        self.assertIn('after:fix-login', lines['fix-logout'])
+        self.fleet('label', 'task', 'fix-logout', 'vega.fleet.dev/after=')
+        self.assertNotIn('fix-login ', self.sh(digest))
+
+    def test_a_task_with_nothing_to_do_leaves_the_digest(self):
+        digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.apply(self.worker('review-login', True))
+        self.fleet('reconcile')
+        self.fleet('result', 'review-login', '--generation', '1', '--outcome', 'not-applicable',
+                   '--summary', 'Nothing to do')
+        self.fleet('reconcile')
+        self.assertEqual(self.sh(digest).strip(), '')
+        self.apply(self.worker('fix-review', False, **{'vega.fleet.dev/after': 'review-login'}))
+        lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
+        self.assertIn('result:not-applicable', lines['review-login'])
+
+    def test_the_overlap_search_reads_workspaces_labels_and_changes_only(self):
+        intake = text('.agents/skills/task-intake/SKILL.md')
+        search, = [b for b in sh_blocks(intake) if b.startswith('fleet list task')]
+        self.apply(self.worker('fix-login', True))
+        self.apply(self.manifest('fix-api', False, urls=('git+https://forge.example/acme/api.git',)))
+        self.fleet('reconcile')
+        self.fleet('declare', 'fix-login', '--change-request', 'https://github.com/acme/app/pull/7')
+        found = lambda q: [l.split()[0] for l in self.sh(search, TEXT=shlex.quote(q)).splitlines()]
+        self.assertEqual(found('acme/api'), ['fix-api'])
+        self.assertEqual(found('pull/7'), ['fix-login'])
+        self.assertEqual(found('reproducer'), [], 'the standing rules are in every brief')
+        self.assertEqual(found('vega'), [], 'every child names vega as its parent')
+        self.assertEqual(found('it\'s "x"'), [])
+
+    def test_dispatch_writes_only_the_task_specific_brief(self):
+        task = self.manifest('fix-login', False, brief='Fix the login redirect.')
+        brief = task['spec']['brief']
+        self.assertTrue(brief.startswith('Fix the login redirect.'), brief)
+        flat = ' '.join(brief.split())
+        for rule in ['open it as a draft', 'fleet declare fix-login --change-request URL',
+                     '<!-- fleet:worker UID -->', 'fleet get task fix-login', 'never merge',
+                     'fleet declare fix-login --json', 'fleet result fix-login --generation',
+                     'failing end-to-end reproducer', 'never `fleet send` Mission Control']:
+            self.assertIn(rule, flat)
+        self.assertNotIn('TASK', brief)
+        vega = self.get('vega')
+        self.assertEqual(task['metadata']['labels']['gateway.fleet.dev/parent-uid'], vega['metadata']['uid'])
+        self.assertEqual(task['metadata']['labels']['vega.fleet.dev/limits'], 'draft-only no-merge')
+        self.assertEqual(task['spec']['harness'], vega['spec']['harness'])
+        self.assertEqual(task['spec']['env'], {'FLEET_CONFIG': self.env['FLEET_CONFIG']})
+        self.assertEqual(task['spec']['workspace'], ['git+https://forge.example/acme/app.git'])
+        self.assertIs(task['spec']['dispatch'], False)
+        intake = text('.agents/skills/task-intake/SKILL.md')
+        for boilerplate in ['fleet:worker', '"kind":"Question"', 'fleet result']:
+            self.assertNotIn(boilerplate, intake, 'the shared rules live in briefs/worker.md')
+        two = self.manifest('fix-both', True, urls=('git+https://forge.example/acme/app.git',
+                                                    'git+https://forge.example/acme/api.git'))
+        self.assertEqual(len(two['spec']['workspace']), 2)
+        self.apply(two)
+        self.fleet('reconcile')
+        self.assertEqual(self.get('fix-both')['status']['phase'], 'Briefed')
+
+    def test_local_worker_rules_join_every_brief(self):
+        task = self.manifest('fix-login', False)
+        self.assertNotIn('cargo', task['spec']['brief'])
+        (self.tmp / 'vega-workspace' / 'private').mkdir()
+        (self.tmp / 'vega-workspace' / 'private' / 'worker-rules.md').write_text('Build with cargo -j 4.\n')
+        task = self.manifest('fix-logout', False)
+        self.assertIn('Build with cargo -j 4.', task['spec']['brief'])
+
+    def test_a_long_question_is_read_by_its_id(self):
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile')
+        question = 'Which endpoint? ' + 'context ' * 600
+        self.fleet('declare', 'fix-login', '--json', json.dumps({'kind': 'Question', 'id': 'q1', 'text': question}))
+        self.fleet('reconcile')
+        prompt = text('prompts/mission-control.md')
+        read, = [c for c in ' '.join(prompt.split()).split('`')[1::2] if 'select(.id' in c]
+        self.assertEqual(self.sh(read, NAME='fix-login', ID='q1').strip(), question.strip())
+
+    def test_every_fleet_command_in_the_guidance_exists(self):
+        kinds = [k.lower() for k in json.loads(self.fleet('version', '--json'))['kinds']]
+        for asset in GUIDANCE:
+            body = text(asset)
+            fenced = body.split('```')[1::2]
+            inline = ''.join(body.split('```')[0::2]).split('`')[1::2]
+            for command in fenced + inline:
+                for line in re.findall(r'(?:^|\| |\$\()(fleet [a-z][^|\n)]*)', command, flags=re.M):
+                    words = line.split()
+                    sub = [w for w in words[1:3] if re.fullmatch(r'[a-z]+', w)]
+                    help_text = self.sh(' '.join(['fleet', *sub[:1], '--help']))
+                    if len(sub) > 1 and re.search(rf'^\s+{sub[1]}\b', help_text, flags=re.M):
+                        help_text = self.sh(' '.join(['fleet', *sub[:2], '--help']))
+                    if sub and sub[0] in ('get', 'status', 'list', 'delete', 'label') and len(sub) > 1:
+                        self.assertIn(sub[1], kinds, f'{asset}: {line}')
+                    elif len(sub) > 1:
+                        self.assertRegex(help_text, rf'Usage: fleet {sub[0]} {sub[1]}\b',
+                                         f'{asset}: {line}')
+                    for flag in re.findall(r'(?<![\w-])(--[a-z][a-z-]*)', line):
+                        self.assertIn(flag, help_text, f'{asset}: {line}')
+        status = text('.agents/skills/task-status/SKILL.md')
+        self.assertIn('fleet send NAME --retry KEY', status)
+        self.assertIn('fleet send NAME --drop KEY', status)
+
+    def test_vega_steers_answers_and_amends_from_the_prompt_it_always_reads(self):
+        prompt = text('prompts/mission-control.md')
+        commands = ' '.join(prompt.split()).split('`')[1::2]
+        send, = [c for c in commands if c.startswith('fleet send NAME "')]
+        answer, = {c for c in commands if '--answers' in c}
+        amend, = {c for c in commands if c.startswith('fleet amend NAME --text')}
+        self.assertIn('--if-generation N', commands)
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile')
+        self.fleet('declare', 'fix-login', '--json', '{"kind":"Question","id":"q1","text":"Keep it?"}')
+        self.sh(send, NAME='fix-login', TEXT='Prefer the smaller fix')
+        self.sh(answer, NAME='fix-login', ID='q1', TEXT='Yes, keep main')
+        inbox = [e['text'] for e in self.get('fix-login')['status']['inbox']]
+        self.assertTrue(any('Prefer the smaller fix' in t for t in inbox), inbox)
+        self.assertIn('q1', self.get('fix-login')['status']['answered'])
+        generation = self.get('fix-login')['metadata']['generation']
+        self.sh(amend, NAME='fix-login', TEXT='Also cover logout', WHY='the user asked')
+        self.assertEqual(len(self.get('fix-login')['spec']['amendments']), 1)
+        retry = subprocess.run(['bash', '-c', amend.replace('NAME', 'fix-login').replace('TEXT', 'again')
+                                .replace('WHY', 'retry') + f' --if-generation {generation}'],
+                               env=self.env, cwd=self.tmp, capture_output=True, text=True, timeout=60)
+        self.assertEqual(retry.returncode, 5, retry.stderr)
+        self.assertEqual(len(self.get('fix-login')['spec']['amendments']), 1)
 
     def test_a_follow_up_amends_the_existing_task(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
@@ -252,10 +379,8 @@ class MissionControl(unittest.TestCase):
         concluded = self.get('fix-login')
         self.assertEqual(concluded['status']['phase'], 'Concluded')
         digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
-        self.assertIn('result:shipped', self.sh(digest))
+        self.assertNotIn('fix-login', self.sh(digest))
         self.sh(amend[0], NAME='fix-login')
-        # Fleet keeps the old result until the worker answers the amendment,
-        # so the board must not show the follow-up as done.
         self.assertIn('amended', self.sh(digest))
         self.assertNotIn('result:shipped', self.sh(digest))
         self.fleet('reconcile')
@@ -268,8 +393,7 @@ class MissionControl(unittest.TestCase):
                    '--summary', 'Covered the follow-up')
         self.fleet('reconcile')
         self.assertEqual(self.get('fix-login')['status']['phase'], 'Concluded')
-        self.assertIn('result:shipped', self.sh(digest))
-        self.assertNotIn('amended', self.sh(digest))
+        self.assertNotIn('fix-login', self.sh(digest))
 
 
 if __name__ == '__main__':
