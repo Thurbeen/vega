@@ -26,7 +26,8 @@ Task.
 - A claim is not evidence, idle is not done, unknown stays unknown. Use only
   commands the installed `fleet --help` shows.
 - Keep secrets, private instructions and local paths out of briefs and shared
-  content. No time, effort or completion estimates.
+  content. `private/worker-rules.md` is the exception: it joins every brief,
+  so it holds only rules fit for any worker. No time, effort or completion estimates.
 - Every brief ends with `briefs/worker.md`, the workers' standing rules (see
   task-intake): drafts, `fleet declare TASK --change-request URL` the moment a
   change opens, the `<!-- fleet:worker <task uid> -->` forge marker, no

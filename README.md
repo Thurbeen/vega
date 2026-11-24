@@ -89,8 +89,8 @@ them. Installing the skills alone creates no Task.
 
 Keep personal additions in `workspace/CUSTOM.md` or
 `workspace/private/INSTRUCTIONS.md`, and rules for every worker on this
-machine, such as build limits, in `workspace/private/worker-rules.md`; git
-ignores them. Never commit
+machine, such as build limits, in `workspace/private/worker-rules.md`, which
+joins every brief, so nothing secret; git ignores them. Never commit
 credentials, Fleet stores or personal config here.
 
 ## Tests

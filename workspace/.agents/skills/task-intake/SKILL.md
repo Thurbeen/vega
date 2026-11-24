@@ -14,10 +14,11 @@ still gets one owner, a concrete result and a workspace of its own.
 
 Confirm the repository, the intended result, the permissions and the checks.
 A follow-up on an existing Task's deliverable is an amendment (see Follow-ups).
-Find the Tasks that already touch a repository, change or word:
+Find the Tasks whose workspace, declared change or labels hold a text, such
+as a repository path:
 
 ```sh
-fleet list task --json | jq -r '.[] | select(tojson | contains("TEXT")) | "\(.metadata.name) \(.status.phase // "-")"'
+fleet list task --json | jq -r --arg q TEXT '.[] | select(.metadata.name != "vega") | select([(.spec.workspace // [])[], ((.status.declared // [])[] | .url // empty), ((.metadata.labels // {})[])] | any(contains($q))) | "\(.metadata.name) \(.status.phase // "-")"'
 ```
 
 Choose a unique lowercase DNS-like name. Record order and limits on the
@@ -64,7 +65,8 @@ concrete result, the repository and its checks, and the limits, including
 whether opening a change is authorized. Never echo it in a reply. The build
 below appends `briefs/worker.md` (how to ask, report and publish) and, when it
 exists, the local `private/worker-rules.md`, such as machine build limits.
-Never repeat those rules in the brief.
+Never repeat those rules in the brief. The build needs bash or zsh; without
+one, write the same manifest with a JSON serializer.
 
 ```sh
 jq -n --arg name NAME --arg request "REQUEST" --arg limits "LIMITS" --argjson dispatch DISPATCH --rawfile brief dispatch/NAME.txt --rawfile rules briefs/worker.md --arg local "$(cat private/worker-rules.md 2>/dev/null)" --argjson vega "$(fleet get task vega)" '{apiVersion: "fleet/v1alpha1", kind: "Task", metadata: {name: $name, labels: {"gateway.fleet.dev/parent": "vega", "gateway.fleet.dev/parent-uid": $vega.metadata.uid, "vega.fleet.dev/request": $request, "vega.fleet.dev/limits": $limits}}, spec: {harness: $vega.spec.harness, env: {FLEET_CONFIG: $ENV.FLEET_CONFIG}, brief: ([$brief, ($rules + $local | gsub("TASK"; $name))] | join("")), workspace: $ARGS.positional, dispatch: $dispatch}}' --args URL > dispatch/NAME.json

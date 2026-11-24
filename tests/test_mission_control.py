@@ -77,7 +77,6 @@ class MissionControl(unittest.TestCase):
 
     def manifest(self, name, dispatch, brief='Fix the login redirect.', limits='draft-only no-merge',
                  urls=('git+https://forge.example/acme/app.git',)):
-        """VEGA writes only the task-specific brief; the shipped command builds the rest."""
         intake = text('.agents/skills/task-intake/SKILL.md')
         build, = [b for b in sh_blocks(intake) if b.startswith('jq -n')]
         workspace = self.tmp / 'vega-workspace'
@@ -156,8 +155,6 @@ class MissionControl(unittest.TestCase):
         self.assertTrue(received[-1].endswith('/result/1'), received)
 
     def test_the_status_digest_rebuilds_state_from_fleet(self):
-        # Serial lanes, limits, open questions and change ownership live on
-        # the Tasks, so a cleared or restarted VEGA reads them back from Fleet.
         digest_skill = text('.agents/skills/status-digest/SKILL.md')
         digest, set_label, release = sh_blocks(digest_skill)
         self.apply(self.worker('fix-login', True, **{'vega.fleet.dev/limits': 'draft-only no-merge'}))
@@ -177,14 +174,12 @@ class MissionControl(unittest.TestCase):
         self.assertIn('held', lines['fix-logout'])
         self.assertIn('after:fix-login', lines['fix-logout'])
         self.assertNotIn('{', '\n'.join(board), 'the digest must not dump JSON')
-        # A failed or stuck predecessor must not start the rest of its lane.
         for body in [digest_skill, text('prompts/mission-control.md')]:
             self.assertIn('verified `shipped`', ' '.join(body.split()))
         self.fleet('send', 'fix-login', '--answers', 'q1', 'Yes')
         self.sh(set_label, NAME='fix-logout')
         self.assertIn('needs:', self.sh(digest))
         self.assertNotIn('ask:q1', self.sh(digest))
-        # An empty value clears a label from the board.
         self.fleet('label', 'task', 'fix-logout', 'vega.fleet.dev/needs=')
         self.assertNotIn('needs:', self.sh(digest))
         generation = self.get('fix-logout')['metadata']['generation']
@@ -219,8 +214,6 @@ class MissionControl(unittest.TestCase):
         self.assertTrue(any('Keep it (Recommended)' in t for t in inbox), inbox)
 
     def test_vega_rehydrates_only_when_its_context_was_cleared(self):
-        # A re-hydrate queued after every reply re-ran the digest on every
-        # turn. VEGA never messages itself; the brief and AGENTS.md start it.
         for asset in GUIDANCE:
             body = text(asset)
             self.assertNotIn('fleet send vega', body, asset)
@@ -229,8 +222,6 @@ class MissionControl(unittest.TestCase):
         self.assertIn('only at session start or after a clear', prompt)
 
     def test_a_finished_task_leaves_the_digest(self):
-        # The result was reported once when it reached VEGA's inbox; the
-        # board keeps only what is live or needs the user.
         digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
         self.apply(self.worker('fix-login', True))
         self.apply(self.worker('fix-logout', True))
@@ -242,6 +233,30 @@ class MissionControl(unittest.TestCase):
         board = self.sh(digest).splitlines()
         self.assertEqual([line.split()[0] for line in board], ['fix-logout'], board)
         self.assertIn('ask:q1', board[0])
+
+    def test_a_task_that_did_not_ship_stays_on_the_digest(self):
+        digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.apply(self.worker('fix-login', True))
+        self.apply(self.worker('fix-logout', False, **{'vega.fleet.dev/after': 'fix-login'}))
+        self.fleet('reconcile')
+        self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'stuck', '--summary', 'Blocked')
+        self.fleet('reconcile')
+        lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
+        self.assertIn('result:stuck', lines['fix-login'])
+        self.assertIn('after:fix-login', lines['fix-logout'])
+
+    def test_the_overlap_search_reads_workspaces_labels_and_changes_only(self):
+        intake = text('.agents/skills/task-intake/SKILL.md')
+        search, = [b for b in sh_blocks(intake) if b.startswith('fleet list task')]
+        self.apply(self.worker('fix-login', True))
+        self.apply(self.manifest('fix-api', False, urls=('git+https://forge.example/acme/api.git',)))
+        self.fleet('reconcile')
+        self.fleet('declare', 'fix-login', '--change-request', 'https://github.com/acme/app/pull/7')
+        found = lambda q: [l.split()[0] for l in self.sh(search, TEXT=shlex.quote(q)).splitlines()]
+        self.assertEqual(found('acme/api'), ['fix-api'])
+        self.assertEqual(found('pull/7'), ['fix-login'])
+        self.assertEqual(found('reproducer'), [], 'the standing rules are in every brief')
+        self.assertEqual(found('it\'s "x"'), [])
 
     def test_dispatch_writes_only_the_task_specific_brief(self):
         task = self.manifest('fix-login', False, brief='Fix the login redirect.')
@@ -290,7 +305,7 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(self.sh(read, NAME='fix-login', ID='q1').strip(), question.strip())
 
     def test_every_fleet_command_in_the_guidance_exists(self):
-        # Fleet v3 on main: `send --retry/--drop` resolve an inbox entry given up on.
+        kinds = [k.lower() for k in json.loads(self.fleet('version', '--json'))['kinds']]
         for asset in GUIDANCE:
             body = text(asset)
             fenced = body.split('```')[1::2]
@@ -302,6 +317,11 @@ class MissionControl(unittest.TestCase):
                     help_text = self.sh(' '.join(['fleet', *sub[:1], '--help']))
                     if len(sub) > 1 and re.search(rf'^\s+{sub[1]}\b', help_text, flags=re.M):
                         help_text = self.sh(' '.join(['fleet', *sub[:2], '--help']))
+                    if sub and sub[0] in ('get', 'status', 'list', 'delete', 'label') and len(sub) > 1:
+                        self.assertIn(sub[1], kinds, f'{asset}: {line}')
+                    elif len(sub) > 1:
+                        self.assertRegex(help_text, rf'Usage: fleet {sub[0]} {sub[1]}\b',
+                                         f'{asset}: {line}')
                     for flag in re.findall(r'(?<![\w-])(--[a-z][a-z-]*)', line):
                         self.assertIn(flag, help_text, f'{asset}: {line}')
         status = text('.agents/skills/task-status/SKILL.md')
@@ -322,8 +342,6 @@ class MissionControl(unittest.TestCase):
         digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
         self.assertNotIn('fix-login', self.sh(digest))
         self.sh(amend[0], NAME='fix-login')
-        # Fleet keeps the old result until the worker answers the amendment,
-        # so the board must not show the follow-up as done.
         self.assertIn('amended', self.sh(digest))
         self.assertNotIn('result:shipped', self.sh(digest))
         self.fleet('reconcile')

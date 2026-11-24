@@ -10,17 +10,19 @@ Fleet holds Mission Control's state. Read it with this one command, which needs
 `jq`, and work from its lines. Do not dump raw JSON or keep a copy elsewhere.
 
 ```sh
-fleet list task --json | jq -r '.[] | select(.metadata.name != "vega") | (.status // {}) as $s | (.metadata.labels // {}) as $l | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($l["vega.fleet.dev/needs"] // "" | select(. != "") | "needs:\(.)"), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] as $you | select($s.phase != "Concluded" or ($you | length) > 0 or ($s.result.generation // 0) < $g) | [.metadata.name, (if .spec.dispatch then $s.phase // "Pending" else "held" end), ($l["vega.fleet.dev/after"] // "" | select(. != "") | "after:\(.)"), (if ($s.result.generation // $g) < $g then "amended" else empty end), $you[]] | join(" ")'
+fleet list task --json | jq -r '.[] | select(.metadata.name != "vega") | (.status // {}) as $s | (.metadata.labels // {}) as $l | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($l["vega.fleet.dev/needs"] // "" | select(. != "") | "needs:\(.)"), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] as $you | select($s.phase != "Concluded" or ($you | length) > 0 or ($s.result.generation // 0) < $g or ($s.result.outcome // "shipped") != "shipped") | [.metadata.name, (if .spec.dispatch then $s.phase // "Pending" else "held" end), ($l["vega.fleet.dev/after"] // "" | select(. != "") | "after:\(.)"), (if ($s.result.generation // $g) < $g then "amended" elif ($s.result.outcome // "shipped") != "shipped" then "result:\($s.result.outcome)" else empty end), $you[]] | join(" ")'
 ```
 
-A finished Task, Concluded with nothing pending, has no line: its result was
-reported when it reached your inbox. No lines means "Nothing running."
+A Task that shipped with nothing pending has no line: its result was reported
+when it reached your inbox. Any other outcome stays until the user decides.
+No lines means "Nothing running."
 
 | Field | Meaning |
 | --- | --- |
 | `held` | `dispatch` is false: queued `after` another, or waiting on the user. |
 | `after:` | Dispatch this Task when the named one concludes. |
 | `amended` | An amendment waits for the worker's answer. |
+| `result:` | Concluded without `shipped`: the user decides what follows, including Tasks held `after` it. |
 | `ask:ID` | A worker Question not yet answered: `fleet send NAME --answers ID TEXT`. |
 | `needs:` | A decision waiting on the user. |
 | `attention:` | A `NeedsAttention` reason; see task-status. |

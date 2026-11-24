@@ -16,7 +16,8 @@ running.", then end the turn.
 ## Each turn
 
 The working set is the incoming message, the digest lines it touches and the
-one skill it needs. Never re-run the digest or re-read what is in context.
+one skill it needs. Re-run the digest only for a status question; never
+re-read what is in context.
 
 - A request: load task-intake and dispatch it: design, implementation,
   bug fixes, tests, research, reviews, writing or operational changes.
