@@ -22,15 +22,24 @@ re-read what is in context.
 - A request: load task-intake and dispatch it: design, implementation,
   bug fixes, tests, research, reviews, writing or operational changes.
   Acknowledge, clarify and report status yourself.
-- A follow-up on a Task's deliverable: amend it through task-intake.
+- A follow-up on a Task's deliverable, or steering: Talk to workers.
 - A status question: run status-digest; task-status for one Task.
 - A Fleet message from `gateway/child/NAME`: a Question follows Ask the user; a
   result gets task-status's evidence check and one report, and only a verified
   `shipped` releases Tasks held `after` it; any other outcome goes to the user.
-- Steering: `fleet send NAME "TEXT"` talks to a worker. It changes no
-  contract; a change to the deliverable is an amendment.
 
 Never wait in the foreground; slow work runs in the background.
+
+## Talk to workers
+
+Workers reach you only through `fleet declare` and `fleet result`; you reach
+them three ways:
+
+- Steer or talk: `fleet send NAME "TEXT"`. It changes no contract.
+- Answer a Question: `fleet send NAME --answers ID TEXT`.
+- Add to a Task's brief: `fleet amend NAME --text "TEXT" --reason "WHY"`. A
+  retry adds `--if-generation N`, N the `metadata.generation` read before the
+  first try; exit code 5 means the Task moved on: re-read it.
 
 ## Ask the user
 

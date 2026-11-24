@@ -343,6 +343,30 @@ class MissionControl(unittest.TestCase):
         self.assertIn('fleet send NAME --retry KEY', status)
         self.assertIn('fleet send NAME --drop KEY', status)
 
+    def test_vega_steers_answers_and_amends_from_the_prompt_it_always_reads(self):
+        prompt = text('prompts/mission-control.md')
+        commands = ' '.join(prompt.split()).split('`')[1::2]
+        send, = [c for c in commands if c.startswith('fleet send NAME "')]
+        answer, = {c for c in commands if '--answers' in c}
+        amend, = {c for c in commands if c.startswith('fleet amend NAME --text')}
+        self.assertIn('--if-generation N', commands)
+        self.apply(self.worker('fix-login', True))
+        self.fleet('reconcile')
+        self.fleet('declare', 'fix-login', '--json', '{"kind":"Question","id":"q1","text":"Keep it?"}')
+        self.sh(send, NAME='fix-login', TEXT='Prefer the smaller fix')
+        self.sh(answer, NAME='fix-login', ID='q1', TEXT='Yes')
+        inbox = [e['text'] for e in self.get('fix-login')['status']['inbox']]
+        self.assertTrue(any('Prefer the smaller fix' in t for t in inbox), inbox)
+        self.assertIn('q1', self.get('fix-login')['status']['answered'])
+        generation = self.get('fix-login')['metadata']['generation']
+        self.sh(amend, NAME='fix-login', TEXT='Also cover logout', WHY='the user asked')
+        self.assertEqual(len(self.get('fix-login')['spec']['amendments']), 1)
+        retry = subprocess.run(['bash', '-c', amend.replace('NAME', 'fix-login').replace('TEXT', 'again')
+                                .replace('WHY', 'retry') + f' --if-generation {generation}'],
+                               env=self.env, cwd=self.tmp, capture_output=True, text=True, timeout=60)
+        self.assertEqual(retry.returncode, 5, retry.stderr)
+        self.assertEqual(len(self.get('fix-login')['spec']['amendments']), 1)
+
     def test_a_follow_up_amends_the_existing_task(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
         amend = [b for b in sh_blocks(intake) if b.startswith('fleet amend')]
