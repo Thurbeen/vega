@@ -14,11 +14,11 @@ still gets one owner, a concrete result and a workspace of its own.
 
 Confirm the repository, the intended result, the permissions and the checks.
 A follow-up on an existing Task's deliverable is an amendment (see Follow-ups).
-Find the Tasks whose workspace, declared change or labels hold a text, such
-as a repository path:
+Find the Tasks whose workspace, declared change or `vega.fleet.dev/` labels
+hold a text, such as a repository path:
 
 ```sh
-fleet list task --json | jq -r --arg q TEXT '.[] | select(.metadata.name != "vega") | select([(.spec.workspace // [])[], ((.status.declared // [])[] | .url // empty), ((.metadata.labels // {})[])] | any(contains($q))) | "\(.metadata.name) \(.status.phase // "-")"'
+fleet list task --json | jq -r --arg q TEXT '.[] | select(.metadata.name != "vega") | select([(.spec.workspace // [])[], ((.status.declared // [])[] | .url // empty), ((.metadata.labels // {}) | with_entries(select(.key | startswith("vega.fleet.dev/"))) | .[])] | any(contains($q))) | "\(.metadata.name) \(.status.phase // "-")"'
 ```
 
 Choose a unique lowercase DNS-like name. Record order and limits on the

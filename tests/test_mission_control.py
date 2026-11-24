@@ -244,6 +244,17 @@ class MissionControl(unittest.TestCase):
         lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
         self.assertIn('result:stuck', lines['fix-login'])
         self.assertIn('after:fix-login', lines['fix-logout'])
+        self.fleet('label', 'task', 'fix-login', 'vega.fleet.dev/decided=drop the lane')
+        self.assertNotIn('fix-login ', self.sh(digest))
+
+    def test_a_task_with_nothing_to_do_leaves_the_digest(self):
+        digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
+        self.apply(self.worker('review-login', True))
+        self.fleet('reconcile')
+        self.fleet('result', 'review-login', '--generation', '1', '--outcome', 'not-applicable',
+                   '--summary', 'Nothing to do')
+        self.fleet('reconcile')
+        self.assertEqual(self.sh(digest).strip(), '')
 
     def test_the_overlap_search_reads_workspaces_labels_and_changes_only(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
@@ -256,6 +267,7 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(found('acme/api'), ['fix-api'])
         self.assertEqual(found('pull/7'), ['fix-login'])
         self.assertEqual(found('reproducer'), [], 'the standing rules are in every brief')
+        self.assertEqual(found('vega'), [], 'every child names vega as its parent')
         self.assertEqual(found('it\'s "x"'), [])
 
     def test_dispatch_writes_only_the_task_specific_brief(self):
