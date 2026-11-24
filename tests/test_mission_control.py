@@ -244,7 +244,7 @@ class MissionControl(unittest.TestCase):
         lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
         self.assertIn('result:stuck', lines['fix-login'])
         self.assertIn('after:fix-login', lines['fix-logout'])
-        self.fleet('label', 'task', 'fix-login', 'vega.fleet.dev/decided=drop the lane')
+        self.fleet('label', 'task', 'fix-logout', 'vega.fleet.dev/after=')
         self.assertNotIn('fix-login ', self.sh(digest))
 
     def test_a_task_with_nothing_to_do_leaves_the_digest(self):
@@ -255,6 +255,9 @@ class MissionControl(unittest.TestCase):
                    '--summary', 'Nothing to do')
         self.fleet('reconcile')
         self.assertEqual(self.sh(digest).strip(), '')
+        self.apply(self.worker('fix-review', False, **{'vega.fleet.dev/after': 'review-login'}))
+        lines = {line.split()[0]: line for line in self.sh(digest).splitlines()}
+        self.assertIn('result:not-applicable', lines['review-login'])
 
     def test_the_overlap_search_reads_workspaces_labels_and_changes_only(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
