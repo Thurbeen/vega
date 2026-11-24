@@ -201,14 +201,14 @@ class MissionControl(unittest.TestCase):
                          'label a `needs:` answer as status-digest shows']:
             self.assertIn(required, flat)
         answer = [c for c in flat.split('`')[1::2] if '--answers' in c]
-        self.assertEqual(answer, ['fleet send NAME --answers ID TEXT'])
+        self.assertEqual(answer, ['fleet send NAME --answers ID "TEXT"'])
         self.apply(self.worker('fix-login', True))
         self.fleet('reconcile')
         self.fleet('declare', 'fix-login', '--json',
                    '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
         digest = sh_blocks(text('.agents/skills/status-digest/SKILL.md'))[0]
         self.assertIn('ask:q1', self.sh(digest))
-        self.sh(answer[0].replace('TEXT', "'Keep it (Recommended)'"), NAME='fix-login', ID='q1')
+        self.sh(answer[0], NAME='fix-login', ID='q1', TEXT='Keep it (Recommended)')
         self.assertNotIn('ask:q1', self.sh(digest))
         inbox = [entry['text'] for entry in self.get('fix-login')['status']['inbox']]
         self.assertTrue(any('Keep it (Recommended)' in t for t in inbox), inbox)
@@ -354,7 +354,7 @@ class MissionControl(unittest.TestCase):
         self.fleet('reconcile')
         self.fleet('declare', 'fix-login', '--json', '{"kind":"Question","id":"q1","text":"Keep it?"}')
         self.sh(send, NAME='fix-login', TEXT='Prefer the smaller fix')
-        self.sh(answer, NAME='fix-login', ID='q1', TEXT='Yes')
+        self.sh(answer, NAME='fix-login', ID='q1', TEXT='Yes, keep main')
         inbox = [e['text'] for e in self.get('fix-login')['status']['inbox']]
         self.assertTrue(any('Prefer the smaller fix' in t for t in inbox), inbox)
         self.assertIn('q1', self.get('fix-login')['status']['answered'])

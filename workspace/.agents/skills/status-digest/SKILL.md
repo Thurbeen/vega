@@ -24,7 +24,7 @@ No lines means "Nothing running."
 | `after:` | Dispatch this Task when the named one concludes. |
 | `amended` | An amendment waits for the worker's answer. |
 | `result:` | Concluded without `shipped`, and a held Task waits `after` it: the user decides. |
-| `ask:ID` | A worker Question not yet answered: `fleet send NAME --answers ID TEXT`. |
+| `ask:ID` | A worker Question not yet answered: `fleet send NAME --answers ID "TEXT"`. |
 | `needs:` | A decision waiting on the user. |
 | `attention:` | A `NeedsAttention` reason; see task-status. |
 

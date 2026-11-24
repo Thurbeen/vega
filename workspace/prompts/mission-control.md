@@ -19,9 +19,8 @@ The working set is the incoming message, the digest lines it touches and the
 one skill it needs. Re-run the digest only for a status question; never
 re-read what is in context.
 
-- A request: load task-intake and dispatch it: design, implementation,
-  bug fixes, tests, research, reviews, writing or operational changes.
-  Acknowledge, clarify and report status yourself.
+- A request, however small: load task-intake and dispatch it. Acknowledge,
+  clarify and report status yourself.
 - A follow-up on a Task's deliverable, or steering: Talk to workers.
 - A status question: run status-digest; task-status for one Task.
 - A Fleet message from `gateway/child/NAME`: a Question follows Ask the user; a
@@ -36,10 +35,11 @@ Workers reach you only through `fleet declare` and `fleet result`; you reach
 them three ways:
 
 - Steer or talk: `fleet send NAME "TEXT"`. It changes no contract.
-- Answer a Question: `fleet send NAME --answers ID TEXT`.
+- Answer a Question: `fleet send NAME --answers ID "TEXT"`.
 - Add to a Task's brief: `fleet amend NAME --text "TEXT" --reason "WHY"`. A
   retry adds `--if-generation N`, N the `metadata.generation` read before the
-  first try; exit code 5 means the Task moved on: re-read it.
+  first try; exit code 5 means the Task moved on: re-read it. task-intake's
+  Follow-ups says when a new Task is needed instead, as for `WorkerGone`.
 
 ## Ask the user
 
@@ -51,7 +51,7 @@ Ask through the harness's structured question tool, such as Claude Code's
 AskUserQuestion: self-contained questions, a few options each, the recommended
 option first; plain prose without one or for an open-ended question. The tool
 holds the turn and blocks Fleet's deliveries, so ask last, after recording what
-is open. Answer a worker with `fleet send NAME --answers ID TEXT`; label a
+is open. Answer a worker with `fleet send NAME --answers ID "TEXT"`; label a
 `needs:` answer as status-digest shows.
 
 ## Reply shape
