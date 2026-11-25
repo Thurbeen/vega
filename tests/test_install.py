@@ -16,9 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ['sh', 'bash', 'env', 'cat', 'grep', 'sed', 'mkdir', 'mv', 'cp', 'rm', 'dirname',
          'basename', 'tr', 'head', 'tail', 'mktemp', 'printf', 'uname', 'chmod', 'cmp', 'ls']
-PS_FLAGS = {'--config': '-Config', '--harness': '-Harness', '--uninstall': '-Uninstall'}
-
-
+PS_FLAGS = {'--config': '-Config', '--harness': '-Harness', '--uninstall': '-Uninstall',
+            '--name': '-Name', '--place': '-Place'}
 
 class Sandbox:
     """A HOME, a PATH and a fake-runtime Fleet config, all under one temp dir."""
@@ -80,9 +79,9 @@ class Sandbox:
             self.case.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
-    def task(self, config=None):
+    def task(self, config=None, name='vega'):
         result = subprocess.run([str(self.case.fleet), '--config', str(config or self.config),
-                                 'get', 'task', 'vega'], text=True, capture_output=True,
+                                 'get', 'task', name], text=True, capture_output=True,
                                 timeout=60, env=self.env(), cwd=self.dir)
         return json.loads(result.stdout) if result.returncode == 0 else None
 
@@ -221,6 +220,72 @@ class Install(unittest.TestCase):
         out = box.run('--uninstall', '--config', str(box.config)).stdout
         self.assertIn('not installed', out)
         self.assertFalse((box.home / '.config').exists())
+
+    def test_a_named_install_runs_its_own_task_on_the_place(self):
+        box = Sandbox(self)
+        out = box.run('--config', str(box.config), '--harness', 'codex',
+                      '--name', 'vega-herdr', '--place', 'herdr/local').stdout
+        self.assertIsNone(box.task())
+        named = box.task(name='vega-herdr')
+        self.assertIsNotNone(named, out)
+        spec = named['spec']
+        self.assertEqual(spec['host'], 'herdr/local')
+        self.assertEqual(spec['workspace'], [(ROOT / 'workspace').as_uri()])
+        self.assertEqual(spec['env'], {'FLEET_CONFIG': str(box.config), 'VEGA_TASK': 'vega-herdr'})
+        box.fleet('reconcile')
+        self.assertEqual(box.task(name='vega-herdr')['status']['session']['host'], 'herdr/local')
+        self.assertIn('fleet send vega-herdr', out)
+        again = box.run('--config', str(box.config), '--harness', 'codex',
+                        '--name', 'vega-herdr', '--place', 'herdr/local').stdout
+        self.assertIn('already installed', again)
+        self.assertEqual(box.task(name='vega-herdr')['metadata']['generation'],
+                         named['metadata']['generation'])
+
+    def test_another_place_on_an_installed_vega_is_refused(self):
+        box = Sandbox(self)
+        box.run('--config', str(box.config), '--harness', 'codex')
+        result = box.run('--config', str(box.config), '--harness', 'codex',
+                         '--place', 'herdr/local', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('another host', result.stderr)
+        self.assertNotIn('host', box.task()['spec'])
+
+    def test_a_second_task_on_this_checkout_is_refused(self):
+        box = Sandbox(self)
+        box.run('--config', str(box.config), '--harness', 'codex')
+        result = box.run('--config', str(box.config), '--harness', 'codex',
+                         '--name', 'vega-herdr', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Task vega still works in', result.stderr)
+        self.assertIn('clone', result.stderr)
+        self.assertIsNone(box.task(name='vega-herdr'))
+
+    def test_a_refused_install_leaves_the_config_alone(self):
+        box = Sandbox(self, agents=('codex', 'gh'))
+        box.run('--config', str(box.config), '--harness', 'codex')
+        box.config.write_text(box.config.read_text().split('\n[forge.hosts]')[0])
+        before = box.config.read_bytes()
+        result = box.run('--config', str(box.config), '--harness', 'codex',
+                         '--name', 'vega-herdr', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(box.config.read_bytes(), before)
+
+    def test_uninstall_deletes_only_the_named_task(self):
+        box = Sandbox(self)
+        box.run('--config', str(box.config), '--harness', 'codex', '--name', 'vega-herdr')
+        out = box.run('--uninstall', '--config', str(box.config)).stdout
+        self.assertIn('not installed', out)
+        self.assertIsNone(box.task(name='vega-herdr').get('metadata', {}).get('deletionTimestamp'))
+        out = box.run('--uninstall', '--config', str(box.config), '--name', 'vega-herdr').stdout
+        self.assertIn('vega-herdr', out)
+        self.assertIsNotNone(box.task(name='vega-herdr')['metadata'].get('deletionTimestamp'))
+
+    def test_an_invalid_name_is_refused(self):
+        box = Sandbox(self)
+        result = box.run('--config', str(box.config), '--harness', 'codex', '--name', 'Bad Name',
+                         check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Bad Name', result.stderr)
 
 class InstallPowerShell(Install):
     """The same contract for install.ps1, where PowerShell 7 is on PATH."""

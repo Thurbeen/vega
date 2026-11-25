@@ -1,8 +1,8 @@
-# Install VEGA into a Fleet v3 store as the Task `vega`, or take it out.
-# Safe to run again: it changes only what is missing. Mirrors install.sh.
 param(
     [string]$Config,
     [string]$Harness,
+    [string]$Name = 'vega',
+    [string]$Place,
     [switch]$Uninstall,
     [switch]$Help
 )
@@ -10,14 +10,17 @@ $ErrorActionPreference = 'Stop'
 
 if ($Help) {
     @'
-Usage: ./install.ps1 [-Config PATH] [-Harness NAME]
-       ./install.ps1 -Uninstall [-Config PATH]
+Usage: ./install.ps1 [-Config PATH] [-Harness NAME] [-Name TASK] [-Place PLACE]
+       ./install.ps1 -Uninstall [-Config PATH] [-Name TASK]
 
   -Config PATH   Fleet config to install into (else FLEET_CONFIG, then
                  Fleet's per-user config, which `fleet init` writes if absent)
   -Harness NAME  The coding agent VEGA runs (default: the first one
                  `fleet doctor` finds on PATH)
-  -Uninstall     Delete the Task `vega`; this checkout and its files stay
+  -Name TASK     The Task's name (default: vega); one Task per checkout
+  -Place PLACE   Where it runs, <runtime>/<place> from `fleet runtime places`
+                 (default: this machine)
+  -Uninstall     Delete the Task; this checkout and its files stay
 '@
     exit 0
 }
@@ -41,6 +44,10 @@ function Fleet([string[]]$Arguments, [string]$Stdin) {
     $out = $p.StandardOutput.ReadToEnd()
     $p.WaitForExit()
     [pscustomobject]@{ Code = $p.ExitCode; Out = $out; Err = $err.Result }
+}
+
+if ($Name -cnotmatch '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$') {
+    Die "'$Name' is not a Task name: use lowercase letters, digits, '-' or '.'"
 }
 
 $here = $PSScriptRoot
@@ -74,7 +81,7 @@ if ($named) {
 $Config = [System.IO.Path]::GetFullPath($Config, (Get-Location).Path)
 
 function Get-Vega {
-    $r = Fleet @('--config', $Config, 'get', 'task', 'vega')
+    $r = Fleet @('--config', $Config, 'get', 'task', $Name)
     if ($r.Code -eq 0) { return $r.Out | ConvertFrom-Json }
     if ($r.Code -eq 3) { return $null }
     Die $r.Err.Trim()
@@ -85,9 +92,9 @@ if ($Uninstall) {
         Write-Output "VEGA is not installed in $Config."
         exit 0
     }
-    $r = Fleet @('--config', $Config, 'delete', 'task', 'vega')
+    $r = Fleet @('--config', $Config, 'delete', 'task', $Name)
     if ($r.Code -ne 0) { Die $r.Err.Trim() }
-    Write-Output "Deleted the Task vega from ${Config}: fleet up releases its session."
+    Write-Output "Deleted the Task $Name from ${Config}: fleet up releases its session."
     Write-Output 'Its worker Tasks keep running; this checkout stays.'
     exit 0
 }
@@ -109,6 +116,33 @@ $missing = $harnessChecks | Where-Object { $_.name -eq $Harness -and $_.level -n
 if ($missing) {
     $hint = if ($missing.hint) { ": $($missing.hint)" } else { '' }
     Die "harness ${Harness}: $($missing.detail)$hint"
+}
+
+$workspaceDir = Join-Path $here 'workspace'
+$manifest = Get-Content -Raw -LiteralPath (Join-Path $here 'tasks/vega.json') | ConvertFrom-Json
+$workspace = [System.Uri]::new($workspaceDir, [System.UriKind]::Absolute).AbsoluteUri
+$taskEnv = [ordered]@{ FLEET_CONFIG = $Config }
+if ($Name -cne 'vega') { $taskEnv.VEGA_TASK = $Name }
+$manifest.metadata.name = $Name
+$manifest.spec.harness = $Harness
+$manifest.spec.workspace = @($workspace)
+$manifest.spec | Add-Member -NotePropertyName env -NotePropertyValue $taskEnv -Force
+if ($Place) { $manifest.spec | Add-Member -NotePropertyName host -NotePropertyValue $Place -Force }
+
+$r = Fleet @('--config', $Config, 'list', 'task', '--json')
+if ($r.Code -ne 0) { Die $r.Err.Trim() }
+$sharing = @($r.Out | ConvertFrom-Json) | Where-Object {
+    $_.metadata.name -cne $Name -and @($_.spec.workspace) -ccontains $workspace
+} | Select-Object -First 1
+if ($sharing) { Die "the Task $($sharing.metadata.name) still works in ${workspaceDir}: wait until fleet up releases it, or clone VEGA again for $Name" }
+
+$vega = Get-Vega
+if ($vega) {
+    if ($vega.metadata.deletionTimestamp) { Die 'VEGA is being deleted: run this again once fleet up has released it' }
+    $differs = @('harness', 'host', 'workspace', 'env') | Where-Object {
+        ($vega.spec.$_ | ConvertTo-Json -Compress -Depth 5) -ne ($manifest.spec.$_ | ConvertTo-Json -Compress -Depth 5)
+    }
+    if ($differs) { Die "VEGA is installed with another $($differs -join ', '): run ./install.ps1 -Uninstall first" }
 }
 
 # Workers declare the changes they open; Fleet follows a change only on a
@@ -135,19 +169,7 @@ if (-not (Select-String -LiteralPath $Config -Pattern '^\s*(\[forge\.hosts|hosts
     }
 }
 
-$workspaceDir = Join-Path $here 'workspace'
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $here 'tasks/vega.json') | ConvertFrom-Json
-$manifest.spec.harness = $Harness
-$manifest.spec.workspace = @([System.Uri]::new($workspaceDir, [System.UriKind]::Absolute).AbsoluteUri)
-$manifest.spec | Add-Member -NotePropertyName env -NotePropertyValue ([ordered]@{ FLEET_CONFIG = $Config }) -Force
-
-$vega = Get-Vega
 if ($vega) {
-    if ($vega.metadata.deletionTimestamp) { Die 'VEGA is being deleted: run this again once fleet up has released it' }
-    $differs = @('harness', 'workspace', 'env') | Where-Object {
-        ($vega.spec.$_ | ConvertTo-Json -Compress -Depth 5) -ne ($manifest.spec.$_ | ConvertTo-Json -Compress -Depth 5)
-    }
-    if ($differs) { Die "VEGA is installed with another $($differs -join ', '): run ./install.ps1 -Uninstall first" }
     if (-not $vega.spec.dispatch) {
         $vega.spec.dispatch = $true
         $vega.PSObject.Properties.Remove('status')
@@ -158,15 +180,16 @@ if ($vega) {
 } else {
     $r = Fleet @('--config', $Config, 'apply', '-f', '-', '--create-only') ($manifest | ConvertTo-Json -Depth 20)
     if ($r.Code -ne 0) { Die $r.Err.Trim() }
-    Write-Output "Installed VEGA in ${Config}: the Task vega runs $Harness in $workspaceDir."
+    $on = if ($Place) { " on $Place" } else { '' }
+    Write-Output "Installed VEGA in ${Config}: the Task $Name runs $Harness$on in $workspaceDir."
 }
 if ($added) { Write-Output "Added forge hosts to the config: $($added -join ' ')." }
 
 Write-Output ''
 Write-Output 'Talk to VEGA:'
 if ($named) { Write-Output "  `$env:FLEET_CONFIG = '$Config'" }
-Write-Output '  thurbox                       # VEGA is the session vega'
-Write-Output '  fleet send vega "MESSAGE"     # or queue a message for it'
+Write-Output "  thurbox                       # VEGA is the session $Name"
+Write-Output "  fleet send $Name `"MESSAGE`"     # or queue a message for it"
 $held = $false
 try { $held = ((Fleet @('--config', $Config, 'version', '--json')).Out | ConvertFrom-Json).manager.held -eq $true } catch {}
 if ($held) {

@@ -10,12 +10,13 @@ Fleet holds Mission Control's state. Read it with this one command, which needs
 `jq`, and work from its lines. Do not dump raw JSON or keep a copy elsewhere.
 
 ```sh
-fleet list task --json | jq -r '.[] | select(.metadata.name != "vega") | (.status // {}) as $s | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [.metadata.name, ($s.phase // "-"), (if .spec.dispatch then empty else "held" end), ((.metadata.labels // {}) | to_entries[] | select((.key | startswith("vega.fleet.dev/")) and .value != "") | "\(.key | ltrimstr("vega.fleet.dev/")):\(.value)"), ((.spec.workspace // [])[] | "ws:\(.)"), (($s.declared // [])[] | select(.kind == "ChangeRequest") | "cr:\(.url)"), ([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($s.result // empty | if .generation < $g then "amended" else "result:\(.outcome)" end), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] | join("  ")'
+fleet list task --json | jq -r --arg me VEGA_NAME '[.[].metadata.uid] as $all | .[] | select(.metadata.name != $me) | (.status // {}) as $s | ((.spec.amendments // []) | map(.generation) | max // 0) as $g | [.metadata.name, ($s.phase // "-"), (if .spec.dispatch then empty else "held" end), ((.metadata.labels // {}) as $l | $l["gateway.fleet.dev/parent"] // empty | select(. != $me and ($l["gateway.fleet.dev/parent-uid"] | IN($all[]))) | "parent:\(.)"), ((.metadata.labels // {}) | to_entries[] | select((.key | startswith("vega.fleet.dev/")) and .value != "") | "\(.key | ltrimstr("vega.fleet.dev/")):\(.value)"), ((.spec.workspace // [])[] | "ws:\(.)"), (($s.declared // [])[] | select(.kind == "ChangeRequest") | "cr:\(.url)"), ([($s.declared // [])[] | select(.kind == "Question") | .id] - (($s.answered // {}) | keys) | .[] | "ask:\(.)"), ($s.result // empty | if .generation < $g then "amended" else "result:\(.outcome)" end), (($s.conditions // [])[] | select(.type == "NeedsAttention" and .status == "True") | "attention:\(.reason)")] | join("  ")'
 ```
 
 | Field | Meaning |
 | --- | --- |
 | `held` | `dispatch` is false: queued behind `after`, or waiting on the user. |
+| `parent:` | Another listed Task, such as a second Mission Control, dispatched it and hears its messages; leave it to that Task. |
 | `request:` | The request, in the user's words. |
 | `after:` | Dispatch this Task when the named one concludes. |
 | `limits:` | The user's authorization limits, such as `draft-only no-merge`. |

@@ -58,7 +58,7 @@ anything still open in Fleet (see status-digest), queue the re-hydrate, end the
 turn:
 
 ```sh
-fleet send vega "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
+fleet send VEGA_NAME "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
 Never queue one in reply to a re-hydrate. Fleet delivers to your agent's
@@ -67,5 +67,5 @@ it. Clearing is the user's.
 
 ## Mission Control stays up
 
-Never record a result for `vega`, delete or duplicate it. `fleet up` owns
+Never record a result for your own Task, delete or duplicate it. `fleet up` owns
 reconciliation; if it is down, say so.
