@@ -65,6 +65,7 @@ class MissionControl(unittest.TestCase):
         self.env.update(vega['spec']['env'])
 
     def sh(self, command, **subst):
+        subst.setdefault('VEGA_NAME', self.me)
         for key, value in subst.items():
             command = command.replace(key, value)
         result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command], text=True,
@@ -88,10 +89,8 @@ class MissionControl(unittest.TestCase):
         intake = text('.agents/skills/task-intake/SKILL.md')
         task = next(t for t in json_blocks(intake) if t['kind'] == 'Task' and 'labels' in t['metadata'])
         task['metadata']['name'] = name
-        placeholders = dict(re.findall(r'`(VEGA_[A-Z]+)` is\s+`([^`]+)`', intake))
-        self.assertEqual(set(placeholders), {'VEGA_NAME', 'VEGA_UID'})
-        values = {key: self.sh(command).strip() for key, command in placeholders.items()}
-        self.assertEqual(values['VEGA_NAME'], self.me)
+        uid_command = re.search(r'`VEGA_UID` is\s+`([^`]+)`', intake).group(1)
+        values = {'VEGA_NAME': self.me, 'VEGA_UID': self.sh(uid_command).strip()}
         task['metadata']['labels'] = {key: values.get(value, value)
                                       for key, value in task['metadata']['labels'].items()}
         task['metadata']['labels'].update(labels)
@@ -194,6 +193,10 @@ class MissionControl(unittest.TestCase):
         # Another Mission Control's worker is marked so this one leaves it alone.
         self.assertIn('parent:other-vega', lines['peer-work'])
         self.assertNotIn('parent:', lines['fix-login'])
+        # Once that parent is gone, its worker is this one's to handle.
+        self.fleet('delete', 'task', 'other-vega')
+        self.fleet('reconcile')
+        self.assertNotIn('parent:', self.sh(digest))
         self.assertIn('limits:draft-only no-merge', lines['fix-login'])
         # The workspace shows which live Tasks overlap or own a follow-up.
         self.assertIn('ws:git+https://forge.example/acme/app.git', lines['fix-login'])
@@ -288,10 +291,14 @@ class MissionControl(unittest.TestCase):
         self.assertNotIn('amended', self.sh(digest))
 
     def test_guidance_names_its_own_task_through_vega_task(self):
+        # Shell-neutral: the agent may run the commands in sh or PowerShell.
+        self.assertIn('`VEGA_TASK` environment variable, else `vega`',
+                      ' '.join(text('AGENTS.md').split()))
         for asset in GUIDANCE:
             commands = text(asset).split('```')[1::2] + ''.join(text(asset).split('```')[0::2]).split('`')[1::2]
             for command in commands:
-                self.assertIsNone(re.search(r'fleet \S+( task)? vega\b|"vega"', command), (asset, command))
+                self.assertIsNone(re.search(r'fleet \S+( task)? vega\b|"vega"|\$\{?VEGA_TASK', command),
+                                  (asset, command))
 
 
 class NamedMissionControl(MissionControl):

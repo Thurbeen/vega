@@ -1,6 +1,4 @@
 #!/bin/sh
-# Install VEGA into a Fleet v3 store as a Task, `vega` by default, or take it out.
-# Safe to run again: it changes only what is missing.
 set -eu
 
 usage() {
@@ -149,6 +147,30 @@ missing=$(printf '%s' "$doctor" | jq -r --arg h "$harness" 'first(.checks[]
 	| "\(.detail)\(if .hint then ": \(.hint)" else "" end)") // empty' 2>/dev/null) || true
 [ -z "$missing" ] || die "harness $harness: $missing"
 
+workspace=$(jq -rn --arg p "$here/workspace" '"file://" + ($p | split("/") | map(@uri) | join("/"))')
+manifest=$(jq -c --arg n "$name" --arg h "$harness" --arg p "$place" --arg ws "$workspace" --arg cfg "$config" \
+	'.metadata.name = $n | .spec.harness = $h | .spec.workspace = [$ws] | .spec.env = {FLEET_CONFIG: $cfg}
+	| if $n != "vega" then .spec.env.VEGA_TASK = $n else . end
+	| if $p != "" then .spec.host = $p else . end' \
+	"$here/tasks/vega.json")
+
+tasks=$(fleet --config "$config" list task --json 2>&1) || die "$tasks"
+sharing=$(printf '%s' "$tasks" | jq -r --arg n "$name" --arg ws "$workspace" 'first(.[]
+	| select(.metadata.name != $n and ((.spec.workspace // []) | index($ws))) | .metadata.name) // empty')
+[ -z "$sharing" ] ||
+	die "the Task $sharing still works in $here/workspace: wait until fleet up releases it, or clone VEGA again for $name"
+
+installed=
+if get_vega; then
+	installed=1
+	printf '%s' "$vega" | jq -e '.metadata.deletionTimestamp == null' >/dev/null ||
+		die "VEGA is being deleted: run this again once fleet up has released it"
+	differs=$(printf '%s' "$vega" | jq -r --argjson want "$manifest" \
+		'[("harness", "host", "workspace", "env") as $k | select(.spec[$k] != $want.spec[$k]) | $k] | join(", ")')
+	[ -z "$differs" ] ||
+		die "VEGA is installed with another $differs: run ./install.sh --uninstall first"
+fi
+
 # Workers declare the changes they open; Fleet follows a change only on a
 # forge host the config names. Add the hosts whose CLI is here, once.
 added=
@@ -178,26 +200,7 @@ if ! grep -Eq '^[[:space:]]*(\[forge\.hosts|hosts[[:space:]]*=|forge\.hosts)' "$
 	fi
 fi
 
-workspace=$(jq -rn --arg p "$here/workspace" '"file://" + ($p | split("/") | map(@uri) | join("/"))')
-manifest=$(jq -c --arg n "$name" --arg h "$harness" --arg p "$place" --arg ws "$workspace" --arg cfg "$config" \
-	'.metadata.name = $n | .spec.harness = $h | .spec.workspace = [$ws] | .spec.env = {FLEET_CONFIG: $cfg}
-	| if $n != "vega" then .spec.env.VEGA_TASK = $n else . end
-	| if $p != "" then .spec.host = $p else . end' \
-	"$here/tasks/vega.json")
-
-sharing=$(fleet --config "$config" list task --json |
-	jq -r --arg n "$name" --arg ws "$workspace" 'first(.[] | select(.metadata.name != $n
-		and ((.spec.workspace // []) | index($ws))) | .metadata.name) // empty')
-[ -z "$sharing" ] ||
-	die "the Task $sharing already works in $here/workspace: clone VEGA again for $name"
-
-if get_vega; then
-	printf '%s' "$vega" | jq -e '.metadata.deletionTimestamp == null' >/dev/null ||
-		die "VEGA is being deleted: run this again once fleet up has released it"
-	differs=$(printf '%s' "$vega" | jq -r --argjson want "$manifest" \
-		'[("harness", "host", "workspace", "env") as $k | select(.spec[$k] != $want.spec[$k]) | $k] | join(", ")')
-	[ -z "$differs" ] ||
-		die "VEGA is installed with another $differs: run ./install.sh --uninstall first"
+if [ -n "$installed" ]; then
 	if ! printf '%s' "$vega" | jq -e '.spec.dispatch' >/dev/null; then
 		printf '%s' "$vega" | jq '.spec.dispatch = true | del(.status)' |
 			fleet --config "$config" apply -f - >/dev/null

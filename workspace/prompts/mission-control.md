@@ -58,7 +58,7 @@ anything still open in Fleet (see status-digest), queue the re-hydrate, end the
 turn:
 
 ```sh
-fleet send "${VEGA_TASK:-vega}" "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
+fleet send VEGA_NAME "VEGA re-hydrate: read AGENTS.md and prompts/mission-control.md, then follow Re-hydrate."
 ```
 
 Never queue one in reply to a re-hydrate. Fleet delivers to your agent's

@@ -84,8 +84,8 @@ Task, so the file is safe to delete.
 - The two `gateway.fleet.dev/parent` labels make Fleet relay the worker's
   Questions, declared changes and result into VEGA's own inbox, which is how
   Mission Control hears back without waiting. `VEGA_NAME` is
-  `echo "${VEGA_TASK:-vega}"`, your own Task, and `VEGA_UID` is
-  `fleet get task "${VEGA_TASK:-vega}" | jq -r .metadata.uid`.
+  your own Task (see AGENTS.md), and `VEGA_UID` is
+  `fleet get task VEGA_NAME | jq -r .metadata.uid`.
 - `harness` is your own Task's `spec.harness` unless the user or the repository
   asks for another.
 - `env.FLEET_CONFIG` is the value of your own `FLEET_CONFIG`, so the worker's

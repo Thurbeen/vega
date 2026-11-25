@@ -1,5 +1,3 @@
-# Install VEGA into a Fleet v3 store as a Task, `vega` by default, or take it out.
-# Safe to run again: it changes only what is missing. Mirrors install.sh.
 param(
     [string]$Config,
     [string]$Harness,
@@ -120,6 +118,33 @@ if ($missing) {
     Die "harness ${Harness}: $($missing.detail)$hint"
 }
 
+$workspaceDir = Join-Path $here 'workspace'
+$manifest = Get-Content -Raw -LiteralPath (Join-Path $here 'tasks/vega.json') | ConvertFrom-Json
+$workspace = [System.Uri]::new($workspaceDir, [System.UriKind]::Absolute).AbsoluteUri
+$taskEnv = [ordered]@{ FLEET_CONFIG = $Config }
+if ($Name -cne 'vega') { $taskEnv.VEGA_TASK = $Name }
+$manifest.metadata.name = $Name
+$manifest.spec.harness = $Harness
+$manifest.spec.workspace = @($workspace)
+$manifest.spec | Add-Member -NotePropertyName env -NotePropertyValue $taskEnv -Force
+if ($Place) { $manifest.spec | Add-Member -NotePropertyName host -NotePropertyValue $Place -Force }
+
+$r = Fleet @('--config', $Config, 'list', 'task', '--json')
+if ($r.Code -ne 0) { Die $r.Err.Trim() }
+$sharing = @($r.Out | ConvertFrom-Json) | Where-Object {
+    $_.metadata.name -cne $Name -and @($_.spec.workspace) -ccontains $workspace
+} | Select-Object -First 1
+if ($sharing) { Die "the Task $($sharing.metadata.name) still works in ${workspaceDir}: wait until fleet up releases it, or clone VEGA again for $Name" }
+
+$vega = Get-Vega
+if ($vega) {
+    if ($vega.metadata.deletionTimestamp) { Die 'VEGA is being deleted: run this again once fleet up has released it' }
+    $differs = @('harness', 'host', 'workspace', 'env') | Where-Object {
+        ($vega.spec.$_ | ConvertTo-Json -Compress -Depth 5) -ne ($manifest.spec.$_ | ConvertTo-Json -Compress -Depth 5)
+    }
+    if ($differs) { Die "VEGA is installed with another $($differs -join ', '): run ./install.ps1 -Uninstall first" }
+}
+
 # Workers declare the changes they open; Fleet follows a change only on a
 # forge host the config names. Add the hosts whose CLI is here, once.
 $added = @()
@@ -144,31 +169,7 @@ if (-not (Select-String -LiteralPath $Config -Pattern '^\s*(\[forge\.hosts|hosts
     }
 }
 
-$workspaceDir = Join-Path $here 'workspace'
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $here 'tasks/vega.json') | ConvertFrom-Json
-$workspace = [System.Uri]::new($workspaceDir, [System.UriKind]::Absolute).AbsoluteUri
-$taskEnv = [ordered]@{ FLEET_CONFIG = $Config }
-if ($Name -ne 'vega') { $taskEnv.VEGA_TASK = $Name }
-$manifest.metadata.name = $Name
-$manifest.spec.harness = $Harness
-$manifest.spec.workspace = @($workspace)
-$manifest.spec | Add-Member -NotePropertyName env -NotePropertyValue $taskEnv -Force
-if ($Place) { $manifest.spec | Add-Member -NotePropertyName host -NotePropertyValue $Place -Force }
-
-$r = Fleet @('--config', $Config, 'list', 'task', '--json')
-if ($r.Code -ne 0) { Die $r.Err.Trim() }
-$sharing = @($r.Out | ConvertFrom-Json) | Where-Object {
-    $_.metadata.name -ne $Name -and @($_.spec.workspace) -contains $workspace
-} | Select-Object -First 1
-if ($sharing) { Die "the Task $($sharing.metadata.name) already works in ${workspaceDir}: clone VEGA again for $Name" }
-
-$vega = Get-Vega
 if ($vega) {
-    if ($vega.metadata.deletionTimestamp) { Die 'VEGA is being deleted: run this again once fleet up has released it' }
-    $differs = @('harness', 'host', 'workspace', 'env') | Where-Object {
-        ($vega.spec.$_ | ConvertTo-Json -Compress -Depth 5) -ne ($manifest.spec.$_ | ConvertTo-Json -Compress -Depth 5)
-    }
-    if ($differs) { Die "VEGA is installed with another $($differs -join ', '): run ./install.ps1 -Uninstall first" }
     if (-not $vega.spec.dispatch) {
         $vega.spec.dispatch = $true
         $vega.PSObject.Properties.Remove('status')

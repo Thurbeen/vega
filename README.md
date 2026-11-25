@@ -26,15 +26,16 @@ The installer:
    on PATH;
 4. adds `[forge.hosts]` for `github.com` and `gitlab.com` when the config has
    none and `gh` or `glab` is on PATH, so workers can declare their changes;
-5. applies the Task `vega`, which works in this checkout's `workspace/`.
+5. applies the Task `vega`, or the `--name` you give, which works in this
+   checkout's `workspace/`.
 
 It installs into `--config PATH`, else `FLEET_CONFIG`, else Fleet's per-user
 config. `--name TASK` names the Task instead of `vega`; `--place PLACE` runs
 it on `<runtime>/<place>` from `fleet runtime places` instead of this machine.
 Run it again at any time: it changes only what is missing.
 
-Talk to VEGA in thurbox, where it is the session `vega`, or queue a message
-with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
+Talk to VEGA in thurbox, where it is the session `vega` (or its `--name`), or
+queue a message with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
 `fleet up`; with the fleet-only install, run `fleet up` yourself. Claude Code
 asks once whether to trust the `workspace/` folder: answer it in VEGA's
 session, since Fleet never does; VEGA starts once you do.

@@ -256,9 +256,19 @@ class Install(unittest.TestCase):
         result = box.run('--config', str(box.config), '--harness', 'codex',
                          '--name', 'vega-herdr', check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Task vega already works in', result.stderr)
+        self.assertIn('Task vega still works in', result.stderr)
         self.assertIn('clone', result.stderr)
         self.assertIsNone(box.task(name='vega-herdr'))
+
+    def test_a_refused_install_leaves_the_config_alone(self):
+        box = Sandbox(self, agents=('codex', 'gh'))
+        box.run('--config', str(box.config), '--harness', 'codex')
+        box.config.write_text(box.config.read_text().split('\n[forge.hosts]')[0])
+        before = box.config.read_bytes()
+        result = box.run('--config', str(box.config), '--harness', 'codex',
+                         '--name', 'vega-herdr', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(box.config.read_bytes(), before)
 
     def test_uninstall_deletes_only_the_named_task(self):
         box = Sandbox(self)
