@@ -7,7 +7,9 @@ copy local operator configuration, Fleet stores, credentials or machine paths.
 
 Check every Fleet claim against Fleet v3's code and docs (`docs/fleet/` in
 Thurbeen/thurbox). A place is `<runtime>/<place>`. `install.sh` and
-`install.ps1` do the same steps; change both together.
+`install.ps1` do the same steps; change both together. The installer names
+the Task (`vega` by default) and passes another name as `VEGA_TASK`: the
+workspace names its own Task `${VEGA_TASK:-vega}`, never `vega`.
 
 For a reported issue, write an end-to-end reproducer and see it fail for the
 right reason before fixing. Required gate: set FLEET_BIN to a Fleet v3 binary

@@ -29,7 +29,9 @@ The installer:
 5. applies the Task `vega`, which works in this checkout's `workspace/`.
 
 It installs into `--config PATH`, else `FLEET_CONFIG`, else Fleet's per-user
-config. Run it again at any time: it changes only what is missing.
+config. `--name TASK` names the Task instead of `vega`; `--place PLACE` runs
+it on `<runtime>/<place>` from `fleet runtime places` instead of this machine.
+Run it again at any time: it changes only what is missing.
 
 Talk to VEGA in thurbox, where it is the session `vega`, or queue a message
 with `fleet send vega "MESSAGE"`. Fleet must be running: thurbox starts
@@ -38,9 +40,26 @@ asks once whether to trust the `workspace/` folder: answer it in VEGA's
 session, since Fleet never does; VEGA starts once you do.
 
 Update with `git pull`: VEGA reads its instructions from this checkout.
-Uninstall with `./install.sh --uninstall` (`./install.ps1 -Uninstall`). It
-deletes the Task `vega`; its workers and this checkout stay. To change the
-agent, uninstall, then install with another `--harness`.
+Uninstall with `./install.sh --uninstall` (`./install.ps1 -Uninstall`), with
+the same `--name` if you gave one. It deletes the Task; its workers and this
+checkout stay. To change the agent or the place, uninstall, then install again.
+
+### A second Mission Control
+
+One checkout serves one Task: the installer refuses a second Task on a
+`workspace/` another Task already works in. Clone VEGA again and install from
+that clone with another name:
+
+```sh
+git clone https://github.com/Thurbeen/vega vega-herdr
+cd vega-herdr
+./install.sh --name vega-herdr --place herdr/local
+```
+
+Both read every Task in their status digest, but Fleet relays a worker's
+messages only to the Mission Control that dispatched it. The digest marks
+another Mission Control's workers `parent:NAME`, and VEGA leaves them to it.
+Send each request to one Mission Control only, or both dispatch it.
 
 ## How it works
 

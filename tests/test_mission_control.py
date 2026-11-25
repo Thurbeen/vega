@@ -36,6 +36,9 @@ def json_blocks(body):
 
 
 class MissionControl(unittest.TestCase):
+    install = ''
+    me = 'vega'
+
     def setUp(self):
         fleet = os.environ.get('FLEET_BIN')
         self.assertTrue(fleet, 'Set FLEET_BIN to a Fleet v3 binary; integration is required')
@@ -53,11 +56,13 @@ class MissionControl(unittest.TestCase):
         # installer sets it on the Task.
         self.env = {'HOME': str(self.tmp), 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}',
                     'FLEET_CONFIG': str(self.config)}
-        self.sh(f'{shlex.quote(str(ROOT / "install.sh"))} --harness codex')
+        self.sh(f'{shlex.quote(str(ROOT / "install.sh"))} --harness codex {self.install}')
         self.fleet('reconcile')
-        vega = self.get('vega')
+        vega = self.get(self.me)
         self.assertEqual(vega['status']['phase'], 'Briefed')
         self.assertEqual(vega['spec']['env']['FLEET_CONFIG'], str(self.config))
+        # The guidance runs in the Task's own environment.
+        self.env.update(vega['spec']['env'])
 
     def sh(self, command, **subst):
         for key, value in subst.items():
@@ -83,13 +88,15 @@ class MissionControl(unittest.TestCase):
         intake = text('.agents/skills/task-intake/SKILL.md')
         task = next(t for t in json_blocks(intake) if t['kind'] == 'Task' and 'labels' in t['metadata'])
         task['metadata']['name'] = name
-        uid_command = re.search(r'`(fleet get task vega \| jq -r \.metadata\.uid)`', intake).group(1)
-        uid = self.sh(uid_command).strip()
-        task['metadata']['labels'] = {key: uid if value == 'VEGA_UID' else value
+        placeholders = dict(re.findall(r'`(VEGA_[A-Z]+)` is\s+`([^`]+)`', intake))
+        self.assertEqual(set(placeholders), {'VEGA_NAME', 'VEGA_UID'})
+        values = {key: self.sh(command).strip() for key, command in placeholders.items()}
+        self.assertEqual(values['VEGA_NAME'], self.me)
+        task['metadata']['labels'] = {key: values.get(value, value)
                                       for key, value in task['metadata']['labels'].items()}
         task['metadata']['labels'].update(labels)
         task['spec']['env']['FLEET_CONFIG'] = self.env['FLEET_CONFIG']
-        task['spec']['harness'] = self.get('vega')['spec']['harness']
+        task['spec']['harness'] = self.get(self.me)['spec']['harness']
         task['spec']['dispatch'] = dispatch
         return task
 
@@ -132,7 +139,8 @@ class MissionControl(unittest.TestCase):
         examples = [r for a in GUIDANCE for r in json_blocks(text(a))]
         self.assertGreaterEqual(len(examples), 3)
         for resource in examples:
-            resource = json.loads(json.dumps(resource).replace('VEGA_UID', self.get('vega')['metadata']['uid']))
+            resource = json.loads(json.dumps(resource).replace('VEGA_UID', self.get(self.me)['metadata']['uid'])
+                                  .replace('VEGA_NAME', self.me))
             resource.setdefault('spec', {})
             if resource['kind'] == 'Task':
                 resource['spec']['dispatch'] = False
@@ -159,7 +167,7 @@ class MissionControl(unittest.TestCase):
         self.fleet('result', 'fix-login', '--generation', '1', '--outcome', 'shipped',
                    '--summary', 'Opened the draft')
         self.fleet('reconcile')
-        received = [r['key'] for r in self.get('vega')['status']['deliveries']['receipts']
+        received = [r['key'] for r in self.get(self.me)['status']['deliveries']['receipts']
                     if r['from'] == 'gateway/child/fix-login']
         self.assertEqual(len(received), 2, received)
         self.assertTrue(received[-1].endswith('/result/1'), received)
@@ -171,13 +179,21 @@ class MissionControl(unittest.TestCase):
         digest, set_label, release = sh_blocks(digest_skill)
         self.apply(self.worker('fix-login', True, **{'vega.fleet.dev/limits': 'draft-only no-merge'}))
         self.apply(self.worker('fix-logout', False, **{'vega.fleet.dev/after': 'fix-login'}))
+        self.apply({'apiVersion': 'fleet/v1alpha1', 'kind': 'Task', 'metadata': {'name': 'other-vega'},
+                    'spec': {'harness': 'codex', 'workspace': [], 'dispatch': False}})
+        self.apply(self.worker('peer-work', False, **{
+            'gateway.fleet.dev/parent': 'other-vega',
+            'gateway.fleet.dev/parent-uid': self.get('other-vega')['metadata']['uid']}))
         self.fleet('reconcile')
         self.fleet('declare', 'fix-login', '--json',
                    '{"kind":"Question","id":"q1","text":"Keep the old endpoint?"}')
         board = self.sh(digest).splitlines()
-        self.assertEqual(len(board), 2, board)
+        self.assertEqual(len(board), 4, board)
         lines = {line.split()[0]: line for line in board}
-        self.assertNotIn('vega', lines)
+        self.assertNotIn(self.me, lines)
+        # Another Mission Control's worker is marked so this one leaves it alone.
+        self.assertIn('parent:other-vega', lines['peer-work'])
+        self.assertNotIn('parent:', lines['fix-login'])
         self.assertIn('limits:draft-only no-merge', lines['fix-login'])
         # The workspace shows which live Tasks overlap or own a follow-up.
         self.assertIn('ws:git+https://forge.example/acme/app.git', lines['fix-login'])
@@ -201,7 +217,7 @@ class MissionControl(unittest.TestCase):
         self.assertTrue(released['spec']['dispatch'])
         self.assertFalse({'vega.fleet.dev/after', 'vega.fleet.dev/needs'}
                          & set(released['metadata'].get('labels', {})))
-        self.assertEqual(released['metadata']['labels']['gateway.fleet.dev/parent'], 'vega')
+        self.assertEqual(released['metadata']['labels']['gateway.fleet.dev/parent'], self.me)
         self.assertEqual(released['metadata']['generation'], generation + 1)
 
     def test_questions_reach_the_user_as_choices_and_answers_go_back(self):
@@ -234,11 +250,11 @@ class MissionControl(unittest.TestCase):
         rehydrate = [b for b in blocks if 'VEGA re-hydrate' in b]
         self.assertEqual(len(rehydrate), 1, 'mission-control must ship one re-hydrate block')
         self.sh(rehydrate[0])
-        inbox = [entry['text'] for entry in self.get('vega')['status']['inbox']]
+        inbox = [entry['text'] for entry in self.get(self.me)['status']['inbox']]
         self.assertEqual(len(inbox), 1, inbox)
         self.assertIn('prompts/mission-control.md', inbox[0])
         self.fleet('reconcile')
-        self.assertFalse(self.get('vega')['status'].get('inbox'))
+        self.assertFalse(self.get(self.me)['status'].get('inbox'))
 
     def test_a_follow_up_amends_the_existing_task(self):
         intake = text('.agents/skills/task-intake/SKILL.md')
@@ -270,6 +286,19 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(self.get('fix-login')['status']['phase'], 'Concluded')
         self.assertIn('result:shipped', self.sh(digest))
         self.assertNotIn('amended', self.sh(digest))
+
+    def test_guidance_names_its_own_task_through_vega_task(self):
+        for asset in GUIDANCE:
+            commands = text(asset).split('```')[1::2] + ''.join(text(asset).split('```')[0::2]).split('`')[1::2]
+            for command in commands:
+                self.assertIsNone(re.search(r'fleet \S+( task)? vega\b|"vega"', command), (asset, command))
+
+
+class NamedMissionControl(MissionControl):
+    """A second Mission Control on the same store, installed under another name."""
+
+    install = '--name vega-herdr'
+    me = 'vega-herdr'
 
 
 if __name__ == '__main__':
