@@ -61,7 +61,6 @@ class MissionControl(unittest.TestCase):
         vega = self.get(self.me)
         self.assertEqual(vega['status']['phase'], 'Briefed')
         self.assertEqual(vega['spec']['env']['FLEET_CONFIG'], str(self.config))
-        # The guidance runs in the Task's own environment.
         self.env.update(vega['spec']['env'])
 
     def sh(self, command, **subst):
@@ -190,12 +189,13 @@ class MissionControl(unittest.TestCase):
         self.assertEqual(len(board), 4, board)
         lines = {line.split()[0]: line for line in board}
         self.assertNotIn(self.me, lines)
-        # Another Mission Control's worker is marked so this one leaves it alone.
         self.assertIn('parent:other-vega', lines['peer-work'])
         self.assertNotIn('parent:', lines['fix-login'])
-        # Once that parent is gone, its worker is this one's to handle.
         self.fleet('delete', 'task', 'other-vega')
         self.fleet('reconcile')
+        self.assertNotIn('parent:', self.sh(digest))
+        self.apply({'apiVersion': 'fleet/v1alpha1', 'kind': 'Task', 'metadata': {'name': 'other-vega'},
+                    'spec': {'harness': 'codex', 'workspace': [], 'dispatch': False}})
         self.assertNotIn('parent:', self.sh(digest))
         self.assertIn('limits:draft-only no-merge', lines['fix-login'])
         # The workspace shows which live Tasks overlap or own a follow-up.
@@ -291,7 +291,6 @@ class MissionControl(unittest.TestCase):
         self.assertNotIn('amended', self.sh(digest))
 
     def test_guidance_names_its_own_task_through_vega_task(self):
-        # Shell-neutral: the agent may run the commands in sh or PowerShell.
         self.assertIn('`VEGA_TASK` environment variable, else `vega`',
                       ' '.join(text('AGENTS.md').split()))
         for asset in GUIDANCE:
